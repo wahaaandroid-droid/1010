@@ -1,10 +1,11 @@
 /** Short UI sounds via Web Audio (no asset files).
  *
- * iOS Safari keeps `AudioContext` `suspended` until a user gesture, and may drop the
- * first scheduled beeps if they happen only after an `async` continuation. We unlock
- * aggressively on capture-phase pointer/touch/click, prime with a 1-frame buffer +
- * silent HTMLAudio, use `webkitAudioContext` when needed, and schedule beeps without
- * an extra `async` hop when the context is already running.
+ * iOS Safari: creating `AudioContext` outside a user gesture can leave audio broken for the
+ * whole session until a later “strong” gesture (e.g. a button click). Initial `pageshow` /
+ * `visibilitychange` are *not* user gestures — those handlers must not construct the context.
+ *
+ * We only `new AudioContext()` from pointer/touch/click unlock paths, prime with buffer + silent
+ * HTMLAudio there, and schedule beeps without an extra async hop when already `running`.
  */
 
 let ctxRef: AudioContext | null = null;
@@ -20,7 +21,8 @@ function getAudioContextConstructor(): AudioContextCtor | null {
   return w.AudioContext ?? w.webkitAudioContext ?? null;
 }
 
-function getCtx(): AudioContext | null {
+/** Create the context — call only from user-gesture unlock (`unlockAudioFromUserGesture`). */
+function getOrCreateCtxInUserGesture(): AudioContext | null {
   if (typeof window === "undefined") return null;
   try {
     if (!ctxRef) {
@@ -32,6 +34,10 @@ function getCtx(): AudioContext | null {
   } catch {
     return null;
   }
+}
+
+function getExistingCtx(): AudioContext | null {
+  return ctxRef;
 }
 
 /** Minimal silent WAV — used for HTMLMediaElement unlock on iOS. */
@@ -79,10 +85,22 @@ function primeAudioGraph(ctx: AudioContext): void {
   osc.stop(t + 0.001);
 }
 
-/** Run synchronously from user-gesture listeners (capture) and from drag start. */
+/** After bfcache / tab focus: resume only — never instantiate `AudioContext` here. */
+function resumeExistingContextAfterLifecycle(): void {
+  const ctx = ctxRef;
+  if (!ctx) return;
+  try {
+    primeSilentBuffer(ctx);
+    if (ctx.state === "suspended") void ctx.resume();
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Run synchronously from user-gesture listeners (capture) and from drag start/end. */
 function unlockAudioFromUserGesture(): void {
   primeHtml5AudioUnlock();
-  const ctx = getCtx();
+  const ctx = getOrCreateCtxInUserGesture();
   if (!ctx) return;
   primeSilentBuffer(ctx);
   primeAudioGraph(ctx);
@@ -112,14 +130,14 @@ export function attachAudioUserGestureUnlock(
 
   const onVisible = () => {
     if (typeof document !== "undefined" && document.visibilityState === "visible") {
-      unlockAudioFromUserGesture();
+      resumeExistingContextAfterLifecycle();
     }
   };
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", onVisible, opts);
   }
 
-  const onPageShow = () => unlockAudioFromUserGesture();
+  const onPageShow = () => resumeExistingContextAfterLifecycle();
   if (typeof window !== "undefined") {
     window.addEventListener("pageshow", onPageShow, opts);
   }
@@ -139,7 +157,7 @@ export function attachAudioUserGestureUnlock(
 }
 
 function runWithAudio(fn: (ctx: AudioContext) => void): void {
-  const ctx = getCtx();
+  const ctx = getExistingCtx();
   if (!ctx) return;
 
   const fire = () => fn(ctx);
