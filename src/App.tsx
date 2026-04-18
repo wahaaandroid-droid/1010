@@ -16,7 +16,14 @@ import {
   type Modifier,
 } from "@dnd-kit/core";
 import { snapCenterToCursor } from "@dnd-kit/modifiers";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Board, type CellMetrics } from "./components/Board";
 import { HandPiece, PiecePreview } from "./components/Piece";
 import { attachAudioUserGestureUnlock, resumeAudio } from "./audio/gameSounds";
@@ -85,6 +92,12 @@ function isTouchLikeActivator(event: Event | null): boolean {
 
 const DEFAULT_METRICS: CellMetrics = { cellSizePx: 28, gapPx: 5.6 };
 
+/** Must match `HandPiece`: 4×4 bounding box + Tailwind `p-3` horizontal padding. */
+const HAND_PREVIEW_MAX_CELLS = 4;
+const HAND_SLOT_PADDING_PX = 24;
+/** Tailwind `gap-2` on the hand section */
+const HAND_SECTION_GAP_PX = 8;
+
 export default function App() {
   const {
     grid,
@@ -99,6 +112,8 @@ export default function App() {
   } = useGameLogic();
 
   const [cellMetrics, setCellMetrics] = useState<CellMetrics>(DEFAULT_METRICS);
+  const [handCellMetrics, setHandCellMetrics] =
+    useState<CellMetrics>(DEFAULT_METRICS);
   const [dragPiece, setDragPiece] = useState<PieceDef | null>(null);
   const [placementPreview, setPlacementPreview] = useState<{
     cells: [number, number][];
@@ -108,6 +123,7 @@ export default function App() {
   const lastBoardAnchorRef = useRef<{ r: number; c: number } | null>(null);
 
   const boardGridRef = useRef<HTMLDivElement | null>(null);
+  const handSectionRef = useRef<HTMLDivElement | null>(null);
 
   /** Touch-only lift applied to drag transform (visual only — not used for hit-testing). */
   const dragTouchLiftPxRef = useRef(0);
@@ -196,6 +212,37 @@ export default function App() {
   );
 
   useEffect(() => attachAudioUserGestureUnlock(document), []);
+
+  useLayoutEffect(() => {
+    const el = handSectionRef.current;
+    if (!el) return;
+
+    const run = () => {
+      const w = el.clientWidth;
+      if (w < 8) return;
+      const cell = cellMetrics.cellSizePx;
+      const gap = cellMetrics.gapPx;
+      const naturalSlot =
+        HAND_PREVIEW_MAX_CELLS * cell +
+        (HAND_PREVIEW_MAX_CELLS - 1) * gap +
+        HAND_SLOT_PADDING_PX;
+      const perSlot =
+        (w - (handSize - 1) * HAND_SECTION_GAP_PX) / handSize;
+      const scale = Math.min(1, perSlot / naturalSlot);
+      setHandCellMetrics((prev) => {
+        const next = { cellSizePx: cell * scale, gapPx: gap * scale };
+        return Math.abs(prev.cellSizePx - next.cellSizePx) < 0.02 &&
+          Math.abs(prev.gapPx - next.gapPx) < 0.02
+          ? prev
+          : next;
+      });
+    };
+
+    run();
+    const ro = new ResizeObserver(run);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [cellMetrics.cellSizePx, cellMetrics.gapPx, handSize]);
 
   const interactionLocked = gameOver || clearingKeys != null;
 
@@ -364,7 +411,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex flex-1 flex-col items-center justify-center gap-5">
+        <main className="flex min-h-0 flex-1 flex-col items-center justify-start gap-4 sm:justify-center sm:gap-5">
           <Board
             grid={grid}
             clearingKeys={clearingKeys}
@@ -375,7 +422,11 @@ export default function App() {
           />
 
           <section
-            className="flex w-full max-w-md flex-wrap items-end justify-center gap-3"
+            ref={handSectionRef}
+            className="grid w-full max-w-[min(100vw-2rem,100svh-14rem)] gap-2 justify-items-center"
+            style={{
+              gridTemplateColumns: `repeat(${handSize}, minmax(0, 1fr))`,
+            }}
             aria-label="Hand"
           >
             {Array.from({ length: handSize }, (_, i) => (
@@ -384,8 +435,8 @@ export default function App() {
                 handIndex={i}
                 piece={hand[i] ?? null}
                 disabled={interactionLocked}
-                cellSizePx={cellMetrics.cellSizePx}
-                gapPx={cellMetrics.gapPx}
+                cellSizePx={handCellMetrics.cellSizePx}
+                gapPx={handCellMetrics.gapPx}
               />
             ))}
           </section>
