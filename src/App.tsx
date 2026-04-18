@@ -48,10 +48,15 @@ const DRAG_TOUCH_LIFT_PX = 108;
  */
 const DRAG_TOUCH_EXTRA_OVER_BOARD_PX = 28;
 /**
- * Shift the floating piece right while over the board (visual only). Layout goal: preview cells
- * under/northwest of the thumb, piece visual southeast — easier to see both.
+ * Shift the floating piece right while over the board (visual only). Layout goal: piece visual
+ * offset from the thumb while the hit-test point (below) drives preview above the finger.
  */
 const DRAG_TOUCH_SIDE_NUDGE_OVER_BOARD_PX = 48;
+/**
+ * On touch, collision uses a point this many pixels **above** the raw finger position so the
+ * green placement preview lands on grid cells north of the thumb (same anchor as drop).
+ */
+const DRAG_TOUCH_PREVIEW_HIT_OFFSET_Y_PX = 92;
 
 function isTouchLikeActivator(event: Event | null): boolean {
   if (!event) return false;
@@ -116,8 +121,8 @@ export default function App() {
   );
 
   /**
-   * Prefer the real pointer for which cell is active (touch lift is visual-only, not applied
-   * here). If the runtime omits coordinates, reuse the last known point.
+   * Mouse: real pointer. Touch: same X, Y shifted up so preview/drop anchor sits above the thumb.
+   * Raw coordinates are still stored for `lastPointerScreenRef` when frames omit `pointerCoordinates`.
    */
   const cellCollisionPointerFirst = useMemo<CollisionDetection>(
     () => (args) => {
@@ -125,7 +130,17 @@ export default function App() {
       if (pc) {
         lastPointerScreenRef.current = { x: pc.x, y: pc.y };
       }
-      const pt = pc ?? lastPointerScreenRef.current;
+      const raw = pc ?? lastPointerScreenRef.current;
+      const touch = dragTouchLiftPxRef.current > 0;
+      const pt =
+        raw != null
+          ? touch
+            ? {
+                x: raw.x,
+                y: raw.y - DRAG_TOUCH_PREVIEW_HIT_OFFSET_Y_PX,
+              }
+            : raw
+          : null;
 
       if (pt) {
         const fromPointer = pointerWithin({
