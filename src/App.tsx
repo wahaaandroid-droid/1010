@@ -117,7 +117,12 @@ export default function App() {
   } = useGameLogic();
 
   const [soundOn, setSoundOn] = useState(() => isGameSoundEnabled());
-  const didBootstrapResetRef = useRef(false);
+  /**
+   * iOS WebKit only reliably unlocks Web Audio from an actual element `click`/`tap` (e.g. Reset).
+   * A programmatic `resetGame()` in `useEffect` is not a user gesture, so we gate the session
+   * behind one explicit button press — same code path as Reset.
+   */
+  const [tapSessionReady, setTapSessionReady] = useState(false);
 
   const [cellMetrics, setCellMetrics] = useState<CellMetrics>(DEFAULT_METRICS);
   const [handCellMetrics, setHandCellMetrics] =
@@ -221,16 +226,15 @@ export default function App() {
 
   useEffect(() => attachAudioUserGestureUnlock(document), []);
 
-  /** Same as tapping Reset on load (requested for iOS audio readiness). */
-  useEffect(() => {
-    if (didBootstrapResetRef.current) return;
-    didBootstrapResetRef.current = true;
-    resetGame();
-  }, [resetGame]);
-
   const onResetFromUser = useCallback(() => {
     resumeAudio();
     resetGame();
+  }, [resetGame]);
+
+  const onStartSession = useCallback(() => {
+    resumeAudio();
+    resetGame();
+    setTapSessionReady(true);
   }, [resetGame]);
 
   const onToggleSound = useCallback(() => {
@@ -273,7 +277,8 @@ export default function App() {
     return () => ro.disconnect();
   }, [cellMetrics.cellSizePx, cellMetrics.gapPx, handSize]);
 
-  const interactionLocked = gameOver || clearingKeys != null;
+  const interactionLocked =
+    !tapSessionReady || gameOver || clearingKeys != null;
 
   const previewTint = useMemo(() => {
     if (!placementPreview) return null;
@@ -486,7 +491,24 @@ export default function App() {
           </section>
         </main>
 
-        {gameOver ? (
+        {!tapSessionReady ? (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-6 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-3xl border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl">
+              <h2 className="text-2xl font-bold text-white">Welcome</h2>
+              <p className="mt-2 text-sm text-slate-400">
+                On iPhone and iPad, Safari only unlocks game audio after a real button tap (same as
+                tapping Reset). Tap below once to start — sound will work on your first move.
+              </p>
+              <button
+                type="button"
+                onClick={onStartSession}
+                className="mt-6 w-full rounded-2xl bg-cyan-500 py-3 text-base font-semibold text-slate-950 shadow-lg active:scale-[0.99]"
+              >
+                Start game
+              </button>
+            </div>
+          </div>
+        ) : gameOver ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6 backdrop-blur-sm">
             <div className="w-full max-w-sm rounded-3xl border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl">
               <h2 className="text-2xl font-bold text-white">Game Over</h2>
