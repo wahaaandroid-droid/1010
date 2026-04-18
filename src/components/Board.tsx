@@ -37,7 +37,7 @@ function BoardCell({
   const showPointerHover =
     isOver && (!dragPreviewActive || previewTint != null);
 
-  const previewLift = previewTint != null ? "z-[5]" : "";
+  const previewLift = previewTint != null ? "z-10" : "";
 
   const borderClass =
     previewTint === "valid"
@@ -146,7 +146,9 @@ export function Board({
 
   return (
     <div
-      className="w-full max-w-[min(100vw-2rem,100svh-14rem)]"
+      className={`w-full max-w-[min(100vw-2rem,100svh-14rem)] ${
+        dragPreviewActive ? "relative z-20" : ""
+      }`}
       style={{ touchAction: "none" }}
     >
       <div
