@@ -169,9 +169,17 @@ function runWithAudio(fn: (ctx: AudioContext) => void): void {
 
   primeSilentBuffer(ctx);
   primeAudioGraph(ctx);
-  void ctx.resume().then(() => {
-    if (ctx.state === "running") fire();
-  });
+  try {
+    void ctx.resume();
+  } catch {
+    /* ignore */
+  }
+  /**
+   * iOS WebKit: deferring playback to `resume().then(...)` often leaves the callback outside the
+   * user-activation window, so the first beep after a drag is dropped. Scheduling in the same
+   * synchronous turn as `resume()` still plays once the context unsuspends (per Web Audio).
+   */
+  fire();
 }
 
 function beep(
