@@ -22,15 +22,16 @@ export const GRID_SIZE = 10;
 const HAND_SIZE = 3;
 const BEST_KEY = "1010-best-score";
 
+/** Brighter fills for dark grid readability */
 export const KIND_TO_COLOR: Record<ShapeKind, string> = {
-  dot: "bg-blue-500",
-  line_h: "bg-purple-500",
-  line_v: "bg-indigo-500",
-  square: "bg-emerald-500",
-  l: "bg-amber-500",
-  t: "bg-rose-500",
-  s: "bg-cyan-500",
-  z: "bg-fuchsia-500",
+  dot: "bg-blue-400",
+  line_h: "bg-purple-400",
+  line_v: "bg-indigo-400",
+  square: "bg-emerald-400",
+  l: "bg-amber-400",
+  t: "bg-rose-400",
+  s: "bg-cyan-400",
+  z: "bg-fuchsia-400",
 };
 
 /** 0 = empty; otherwise shape kind for coloring */

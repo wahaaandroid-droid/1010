@@ -13,8 +13,8 @@ function bounds(cells: [number, number][]) {
   return { rows: maxR + 1, cols: maxC + 1 };
 }
 
-/** Matches board cells: full slot = cellSizePx, inner block inset 3px each side */
-const BOARD_INSET_TOTAL = 6;
+/** Matches board cells: inset-[2px] each side on the inner block */
+const BOARD_INSET_TOTAL = 4;
 
 export interface PiecePreviewProps {
   piece: PieceDef;
@@ -64,12 +64,12 @@ export function PiecePreview({
             >
               {on ? (
                 <div
-                  className={`rounded-md shadow-md ${color}`}
+                  className={`rounded-md shadow-[0_3px_10px_rgba(0,0,0,0.5)] ring-1 ring-white/35 ${color}`}
                   style={{ width: inner, height: inner }}
                 />
               ) : (
                 <div
-                  className="rounded-sm bg-slate-800/40"
+                  className="rounded-sm border border-slate-600/50 bg-slate-800/80"
                   style={{ width: inner, height: inner }}
                 />
               )}

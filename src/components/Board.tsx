@@ -43,17 +43,24 @@ function BoardCell({
       : previewTint === "invalid"
         ? "border-red-400 ring-2 ring-red-400/50 bg-red-500/20"
         : showPointerHover
-          ? "border-cyan-400/80 bg-slate-700/50"
-          : "border-slate-800 bg-slate-900/60";
+          ? "border-cyan-300 bg-slate-600/70 ring-1 ring-cyan-400/40"
+          : "border-slate-500/90 bg-slate-800/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
+
+  const placedBlockClass = [
+    "absolute inset-[2px] rounded-md",
+    "shadow-[0_4px_16px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.35)]",
+    "ring-2 ring-white/45 border border-slate-950/50",
+    color,
+  ].join(" ");
 
   return (
     <div
       ref={setNodeRef}
-      className={`relative aspect-square rounded-lg border transition-colors ${borderClass}`}
+      className={`relative aspect-square rounded-lg border-2 transition-colors ${borderClass}`}
     >
       {filled ? (
         <motion.div
-          className={`absolute inset-[3px] rounded-md shadow-md ${color}`}
+          className={placedBlockClass}
           animate={
             isClearing
               ? { opacity: 0, scale: 0.35 }
@@ -64,7 +71,7 @@ function BoardCell({
       ) : null}
       {previewTint === "valid" && !filled ? (
         <div
-          className="pointer-events-none absolute inset-[3px] rounded-md bg-emerald-400/45 shadow-[inset_0_0_0_2px_rgba(52,211,153,0.9)]"
+          className="pointer-events-none absolute inset-[2px] rounded-md bg-emerald-400/55 shadow-[inset_0_0_0_2px_rgba(16,185,129,1),0_0_12px_rgba(52,211,153,0.35)]"
           aria-hidden
         />
       ) : null}
@@ -125,7 +132,7 @@ export function Board({
     >
       <div
         ref={gridRef}
-        className="aspect-square w-full rounded-3xl border border-slate-800 bg-slate-950/80 p-3 shadow-2xl ring-1 ring-white/5"
+        className="aspect-square w-full rounded-3xl border-2 border-slate-600 bg-slate-900 p-3 shadow-2xl shadow-black/50 ring-1 ring-white/10"
         style={{
           display: "grid",
           gridTemplateColumns: `repeat(10, minmax(0, 1fr))`,
