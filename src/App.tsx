@@ -16,14 +16,7 @@ import {
   type Modifier,
 } from "@dnd-kit/core";
 import { snapCenterToCursor } from "@dnd-kit/modifiers";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Board, type CellMetrics } from "./components/Board";
 import { HandPiece, PiecePreview } from "./components/Piece";
 import { attachAudioUserGestureUnlock, resumeAudio } from "./audio/gameSounds";
@@ -63,29 +56,6 @@ function isTouchLikeActivator(event: Event | null): boolean {
 
 const DEFAULT_METRICS: CellMetrics = { cellSizePx: 28, gapPx: 5.6 };
 
-function readAnchorScreenTL(
-  gridEl: HTMLElement,
-  anchor: { r: number; c: number },
-): { left: number; top: number } | null {
-  const cell = gridEl.querySelector(`[data-board-cell="${anchor.r}-${anchor.c}"]`);
-  if (!cell) return null;
-  const br = cell.getBoundingClientRect();
-  return { left: br.left, top: br.top };
-}
-
-/** Top-left grid cell of the placement footprint (same as droppable anchor for normalized pieces). */
-function anchorFromPlacementCells(cells: [number, number][]): { r: number; c: number } | null {
-  if (cells.length === 0) return null;
-  let r = Infinity;
-  let c = Infinity;
-  for (const [br, bc] of cells) {
-    r = Math.min(r, br);
-    c = Math.min(c, bc);
-  }
-  if (!Number.isFinite(r) || !Number.isFinite(c)) return null;
-  return { r, c };
-}
-
 export default function App() {
   const {
     grid,
@@ -105,13 +75,11 @@ export default function App() {
     cells: [number, number][];
     valid: boolean;
   } | null>(null);
+  /** Drives the board-only placement ghost (same anchor as preview / drop). */
+  const [ghostAnchor, setGhostAnchor] = useState<{ r: number; c: number } | null>(null);
 
   /** Last board anchor while dragging — touch often clears `over` on release before `onDragEnd` */
   const lastBoardAnchorRef = useRef<{ r: number; c: number } | null>(null);
-
-  /** Viewport top-left of the anchor cell — snap DragOverlay to match green preview cells */
-  const anchorScreenTLRef = useRef<{ left: number; top: number } | null>(null);
-  const boardGridRef = useRef<HTMLDivElement | null>(null);
 
   /** Touch-only lift applied to drag transform (visual only — not used for hit-testing). */
   const dragTouchLiftPxRef = useRef(0);
@@ -124,20 +92,6 @@ export default function App() {
       const lift = dragTouchLiftPxRef.current;
       if (!lift) return args.transform;
       return { ...args.transform, y: args.transform.y - lift };
-    },
-    [],
-  );
-
-  /** While a board placement preview is active, pin the drag overlay to that cell (same place as the green frame). */
-  const snapDragOverlayToPlacementAnchor: Modifier = useMemo(
-    () => ({ transform, draggingNodeRect }) => {
-      const tl = anchorScreenTLRef.current;
-      if (tl == null || draggingNodeRect == null) return transform;
-      return {
-        ...transform,
-        x: tl.left - draggingNodeRect.left,
-        y: tl.top - draggingNodeRect.top,
-      };
     },
     [],
   );
@@ -184,29 +138,15 @@ export default function App() {
   );
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
-    }),
     useSensor(TouchSensor, {
       activationConstraint: { delay: 0, tolerance: 12 },
+    }),
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
     }),
   );
 
   useEffect(() => attachAudioUserGestureUnlock(document), []);
-
-  useLayoutEffect(() => {
-    if (!placementPreview || !boardGridRef.current) {
-      if (!placementPreview) anchorScreenTLRef.current = null;
-      return;
-    }
-    const anchor = anchorFromPlacementCells(placementPreview.cells);
-    if (!anchor) {
-      anchorScreenTLRef.current = null;
-      return;
-    }
-    const next = readAnchorScreenTL(boardGridRef.current, anchor);
-    anchorScreenTLRef.current = next;
-  }, [placementPreview, cellMetrics]);
 
   const interactionLocked = gameOver || clearingKeys != null;
 
@@ -239,8 +179,8 @@ export default function App() {
     const p = event.active.data.current?.piece as PieceDef | undefined;
     setDragPiece(p ?? null);
     setPlacementPreview(null);
+    setGhostAnchor(null);
     lastBoardAnchorRef.current = null;
-    anchorScreenTLRef.current = null;
     lastPointerScreenRef.current = null;
   }, []);
 
@@ -248,16 +188,16 @@ export default function App() {
     (event: DragMoveEvent) => {
       if (interactionLocked) {
         setPlacementPreview(null);
+        setGhostAnchor(null);
         lastBoardAnchorRef.current = null;
-        anchorScreenTLRef.current = null;
         lastPointerScreenRef.current = null;
         return;
       }
       const piece = event.active.data.current?.piece as PieceDef | undefined;
       if (!piece) {
         setPlacementPreview(null);
+        setGhostAnchor(null);
         lastBoardAnchorRef.current = null;
-        anchorScreenTLRef.current = null;
         lastPointerScreenRef.current = null;
         return;
       }
@@ -277,18 +217,16 @@ export default function App() {
           seen.add(key);
           cells.push([r, c]);
         }
-        if (boardGridRef.current) {
-          anchorScreenTLRef.current = readAnchorScreenTL(boardGridRef.current, pos);
-        }
         setPlacementPreview({ cells, valid });
+        setGhostAnchor(pos);
         lastBoardAnchorRef.current = pos;
         return;
       }
 
       if (overId?.startsWith("hand-")) {
         setPlacementPreview(null);
+        setGhostAnchor(null);
         lastBoardAnchorRef.current = null;
-        anchorScreenTLRef.current = null;
         return;
       }
 
@@ -301,7 +239,7 @@ export default function App() {
     (event: DragEndEvent) => {
       dragTouchLiftPxRef.current = 0;
       lastPointerScreenRef.current = null;
-      anchorScreenTLRef.current = null;
+      setGhostAnchor(null);
       const handIndex = event.active.data.current?.handIndex as number | undefined;
       const overId = event.over?.id?.toString();
       let pos = parseCellId(overId);
@@ -323,7 +261,7 @@ export default function App() {
   const onDragCancel = useCallback(() => {
     dragTouchLiftPxRef.current = 0;
     lastPointerScreenRef.current = null;
-    anchorScreenTLRef.current = null;
+    setGhostAnchor(null);
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
     setDragPiece(null);
@@ -332,11 +270,7 @@ export default function App() {
   return (
     <DndContext
       sensors={sensors}
-      modifiers={[
-        snapCenterToCursor,
-        liftTouchPieces,
-        snapDragOverlayToPlacementAnchor,
-      ]}
+      modifiers={[snapCenterToCursor, liftTouchPieces]}
       collisionDetection={cellCollisionPointerFirst}
       onDragStart={onDragStart}
       onDragMove={onDragMove}
@@ -388,7 +322,13 @@ export default function App() {
             previewTint={previewTint}
             dragPreviewActive={placementPreview != null}
             onCellMetrics={handleCellMetrics}
-            boardGridRef={boardGridRef}
+            cellSizePx={cellMetrics.cellSizePx}
+            gapPx={cellMetrics.gapPx}
+            placementGhost={
+              dragPiece && ghostAnchor
+                ? { piece: dragPiece, anchor: ghostAnchor }
+                : null
+            }
           />
 
           <section
@@ -432,15 +372,19 @@ export default function App() {
 
       <DragOverlay dropAnimation={null} zIndex={500}>
         {/*
-          On the board, modifiers snap this preview to the anchor cell so it sits on the green frame.
-          Off the board, it follows the pointer (with touch lift).
+          Over the board the visible piece is drawn on the grid (placementGhost); keep an invisible
+          overlay so dnd-kit still measures a stable drag rect and collision tracks the pointer.
         */}
         {dragPiece ? (
           <PiecePreview
             piece={dragPiece}
             cellSizePx={cellMetrics.cellSizePx}
             gapPx={cellMetrics.gapPx}
-            className="drop-shadow-2xl"
+            className={
+              placementPreview != null
+                ? "pointer-events-none opacity-0"
+                : "drop-shadow-2xl"
+            }
           />
         ) : null}
       </DragOverlay>
