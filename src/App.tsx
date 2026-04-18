@@ -113,8 +113,11 @@ export default function App() {
   const anchorScreenTLRef = useRef<{ left: number; top: number } | null>(null);
   const boardGridRef = useRef<HTMLDivElement | null>(null);
 
-  /** Touch-only lift applied to drag transform + collision (see `liftTouchPieces` / `cellCollisionWithTouchLift`). */
+  /** Touch-only lift applied to drag transform (visual only — not used for hit-testing). */
   const dragTouchLiftPxRef = useRef(0);
+
+  /** Touch sometimes omits `pointerCoordinates`; keep last screen point for collision. */
+  const lastPointerScreenRef = useRef<{ x: number; y: number } | null>(null);
 
   const liftTouchPieces: Modifier = useMemo(
     () => (args) => {
@@ -140,36 +143,37 @@ export default function App() {
   );
 
   /**
-   * Always prefer the pointer (with touch vertical lift) so the active cell tracks the finger
-   * smoothly. Using `rectIntersection` first against the snapped drag overlay caused skips.
-   * Gaps between cells: nearest cell center to the pointer, then piece–rect fallback.
+   * Prefer the real pointer for which cell is active. (Do not subtract touch lift here: the
+   * overlay is snapped on the board, so a lifted test point often sits above the grid and
+   * freezes `over`.) If the runtime omits coordinates, reuse the last known point.
    */
-  const cellCollisionWithTouchLift = useMemo<CollisionDetection>(
+  const cellCollisionPointerFirst = useMemo<CollisionDetection>(
     () => (args) => {
-      const lift = dragTouchLiftPxRef.current;
       const pc = args.pointerCoordinates;
-      const adjusted =
-        pc != null ? { x: pc.x, y: pc.y - lift } : null;
+      if (pc) {
+        lastPointerScreenRef.current = { x: pc.x, y: pc.y };
+      }
+      const pt = pc ?? lastPointerScreenRef.current;
 
-      if (adjusted) {
+      if (pt) {
         const fromPointer = pointerWithin({
           ...args,
-          pointerCoordinates: adjusted,
+          pointerCoordinates: pt,
         });
         if (fromPointer.length > 0) return fromPointer;
 
         const pointRect: ClientRect = {
           width: 1,
           height: 1,
-          top: adjusted.y,
-          left: adjusted.x,
-          bottom: adjusted.y + 1,
-          right: adjusted.x + 1,
+          top: pt.y,
+          left: pt.x,
+          bottom: pt.y + 1,
+          right: pt.x + 1,
         };
         const fromClosest = closestCenter({
           ...args,
           collisionRect: pointRect,
-          pointerCoordinates: adjusted,
+          pointerCoordinates: pt,
         });
         if (fromClosest.length > 0) return fromClosest;
       }
@@ -237,6 +241,7 @@ export default function App() {
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
     anchorScreenTLRef.current = null;
+    lastPointerScreenRef.current = null;
   }, []);
 
   const onDragMove = useCallback(
@@ -245,6 +250,7 @@ export default function App() {
         setPlacementPreview(null);
         lastBoardAnchorRef.current = null;
         anchorScreenTLRef.current = null;
+        lastPointerScreenRef.current = null;
         return;
       }
       const piece = event.active.data.current?.piece as PieceDef | undefined;
@@ -252,6 +258,7 @@ export default function App() {
         setPlacementPreview(null);
         lastBoardAnchorRef.current = null;
         anchorScreenTLRef.current = null;
+        lastPointerScreenRef.current = null;
         return;
       }
 
@@ -293,6 +300,7 @@ export default function App() {
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
       dragTouchLiftPxRef.current = 0;
+      lastPointerScreenRef.current = null;
       anchorScreenTLRef.current = null;
       const handIndex = event.active.data.current?.handIndex as number | undefined;
       const overId = event.over?.id?.toString();
@@ -314,6 +322,7 @@ export default function App() {
 
   const onDragCancel = useCallback(() => {
     dragTouchLiftPxRef.current = 0;
+    lastPointerScreenRef.current = null;
     anchorScreenTLRef.current = null;
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
@@ -328,7 +337,7 @@ export default function App() {
         liftTouchPieces,
         snapDragOverlayToPlacementAnchor,
       ]}
-      collisionDetection={cellCollisionWithTouchLift}
+      collisionDetection={cellCollisionPointerFirst}
       onDragStart={onDragStart}
       onDragMove={onDragMove}
       onDragEnd={onDragEnd}
