@@ -85,13 +85,20 @@ function primeAudioGraph(ctx: AudioContext): void {
   osc.stop(t + 0.001);
 }
 
-/** After bfcache / tab focus: resume only — never instantiate `AudioContext` here. */
+/**
+ * Re-touch the graph + `resume()` without creating a context.
+ *
+ * iOS WebKit: opening Safari’s “…” sheet often fires `visibilitychange` / `focus`. Users report
+ * audio starts only after that — the page was “visible” the whole time, yet the first `running`
+ * session can be effectively muted until this nudge runs again. Always calling `resume()` (even
+ * when already running) plus a silent buffer tick matches what fixes output after closing the sheet.
+ */
 function resumeExistingContextAfterLifecycle(): void {
   const ctx = ctxRef;
   if (!ctx) return;
   try {
     primeSilentBuffer(ctx);
-    if (ctx.state === "suspended") void ctx.resume();
+    void ctx.resume();
   } catch {
     /* ignore */
   }
@@ -100,11 +107,22 @@ function resumeExistingContextAfterLifecycle(): void {
 /** Run synchronously from user-gesture listeners (capture) and from drag start/end. */
 function unlockAudioFromUserGesture(): void {
   primeHtml5AudioUnlock();
+  const wasNewContext = ctxRef == null;
   const ctx = getOrCreateCtxInUserGesture();
   if (!ctx) return;
   primeSilentBuffer(ctx);
   primeAudioGraph(ctx);
   if (ctx.state === "suspended") void ctx.resume();
+  /**
+   * First `AudioContext` on iOS can report `running` yet stay muted until a later graph nudge
+   * (often triggered by Safari UI, e.g. closing the “…” sheet). Re-run the same nudge on the next
+   * microtask while activation is still fresh — cheap and matches user-visible recovery.
+   */
+  if (wasNewContext) {
+    queueMicrotask(() => {
+      resumeExistingContextAfterLifecycle();
+    });
+  }
 }
 
 /**
@@ -138,8 +156,11 @@ export function attachAudioUserGestureUnlock(
   }
 
   const onPageShow = () => resumeExistingContextAfterLifecycle();
+  /** Closing Safari’s chrome often fires `focus` without a clean `visibilitychange`; mirror the sheet-close fix. */
+  const onWinFocus = () => resumeExistingContextAfterLifecycle();
   if (typeof window !== "undefined") {
     window.addEventListener("pageshow", onPageShow, opts);
+    window.addEventListener("focus", onWinFocus, opts);
   }
 
   return () => {
@@ -152,6 +173,7 @@ export function attachAudioUserGestureUnlock(
     }
     if (typeof window !== "undefined") {
       window.removeEventListener("pageshow", onPageShow, opts);
+      window.removeEventListener("focus", onWinFocus, opts);
     }
   };
 }
@@ -160,26 +182,20 @@ function runWithAudio(fn: (ctx: AudioContext) => void): void {
   const ctx = getExistingCtx();
   if (!ctx) return;
 
-  const fire = () => fn(ctx);
-
-  if (ctx.state === "running") {
-    fire();
-    return;
-  }
-
-  primeSilentBuffer(ctx);
-  primeAudioGraph(ctx);
   try {
+    /**
+     * Do not skip priming when `state === "running"`. On some iOS builds the context reports
+     * `running` after the first gesture yet produces no audible output until a later lifecycle
+     * nudge (e.g. Safari menu close). A one-sample buffer + `resume()` right before scheduling the
+     * real beep matches that recovery path.
+     */
+    primeSilentBuffer(ctx);
+    primeAudioGraph(ctx);
     void ctx.resume();
   } catch {
     /* ignore */
   }
-  /**
-   * iOS WebKit: deferring playback to `resume().then(...)` often leaves the callback outside the
-   * user-activation window, so the first beep after a drag is dropped. Scheduling in the same
-   * synchronous turn as `resume()` still plays once the context unsuspends (per Web Audio).
-   */
-  fire();
+  fn(ctx);
 }
 
 function beep(
