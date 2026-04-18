@@ -1,8 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import { motion } from "framer-motion";
-import { useLayoutEffect, useRef, useState } from "react";
-import { PiecePreview } from "./Piece";
-import type { GridCell, PieceDef, ShapeKind } from "../hooks/useGameLogic";
+import { useLayoutEffect, useRef } from "react";
+import type { GridCell, ShapeKind } from "../hooks/useGameLogic";
 import { KIND_TO_COLOR } from "../hooks/useGameLogic";
 
 const BOARD_GAP = "0.35rem";
@@ -57,7 +56,6 @@ function BoardCell({
   return (
     <div
       ref={setNodeRef}
-      data-board-cell={`${r}-${c}`}
       className={`relative aspect-square rounded-lg border-2 transition-colors ${borderClass}`}
     >
       {filled ? (
@@ -96,11 +94,6 @@ export interface BoardProps {
   /** True while a piece placement preview is shown (including stale anchor between cells) */
   dragPreviewActive?: boolean;
   onCellMetrics?: (m: CellMetrics) => void;
-  /** Same metrics as hand / DragOverlay — aligns ghost with grid cells */
-  cellSizePx?: number;
-  gapPx?: number;
-  /** Visual-only piece pinned to the preview anchor (DnD overlay stays invisible over the board). */
-  placementGhost?: { piece: PieceDef; anchor: { r: number; c: number } } | null;
 }
 
 export function Board({
@@ -109,12 +102,8 @@ export function Board({
   previewTint,
   dragPreviewActive = false,
   onCellMetrics,
-  cellSizePx = 28,
-  gapPx = 5.6,
-  placementGhost,
 }: BoardProps) {
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const [ghostOffset, setGhostOffset] = useState<{ left: number; top: number } | null>(null);
 
   useLayoutEffect(() => {
     const el = gridRef.current;
@@ -124,80 +113,50 @@ export function Board({
       const rect = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
       const gapStr = cs.rowGap || cs.columnGap || cs.gap || "0";
-      const gapPxParsed = parseFloat(gapStr) || 0;
+      const gapPx = parseFloat(gapStr) || 0;
       const w = rect.width;
-      const cell = (w - 9 * gapPxParsed) / 10;
-      if (cell > 2) onCellMetrics({ cellSizePx: cell, gapPx: gapPxParsed });
-
-      if (placementGhost) {
-        const { r, c } = placementGhost.anchor;
-        const cellEl = el.querySelector(`[data-board-cell="${r}-${c}"]`);
-        if (cellEl) {
-          const gr = el.getBoundingClientRect();
-          const cr = cellEl.getBoundingClientRect();
-          setGhostOffset({ left: cr.left - gr.left, top: cr.top - gr.top });
-        } else {
-          setGhostOffset(null);
-        }
-      } else {
-        setGhostOffset(null);
-      }
+      const cell = (w - 9 * gapPx) / 10;
+      if (cell > 2) onCellMetrics({ cellSizePx: cell, gapPx });
     };
 
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [onCellMetrics, placementGhost]);
+  }, [onCellMetrics]);
 
   return (
     <div
       className="w-full max-w-[min(100vw-2rem,100svh-14rem)]"
       style={{ touchAction: "none" }}
     >
-      <div className="relative">
-        <div
-          ref={gridRef}
-          className="aspect-square w-full rounded-3xl border-2 border-slate-600 bg-slate-900 p-3 shadow-2xl shadow-black/50 ring-1 ring-white/10"
-          style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(10, minmax(0, 1fr))`,
-            gridTemplateRows: `repeat(10, minmax(0, 1fr))`,
-            gap: BOARD_GAP,
-          }}
-        >
-          {grid.map((row, r) =>
-            row.map((cell, c) => {
-              const pk = `${r}-${c}`;
-              const tint = previewTint?.get(pk) ?? null;
-              return (
-                <BoardCell
-                  key={pk}
-                  r={r}
-                  c={c}
-                  cell={cell}
-                  clearingKeys={clearingKeys}
-                  previewTint={tint}
-                  dragPreviewActive={dragPreviewActive}
-                />
-              );
-            }),
-          )}
-        </div>
-        {placementGhost && ghostOffset ? (
-          <div
-            className="pointer-events-none absolute z-20"
-            style={{ left: ghostOffset.left, top: ghostOffset.top }}
-            aria-hidden
-          >
-            <PiecePreview
-              piece={placementGhost.piece}
-              cellSizePx={cellSizePx}
-              gapPx={gapPx}
-              className="drop-shadow-2xl"
-            />
-          </div>
-        ) : null}
+      <div
+        ref={gridRef}
+        className="aspect-square w-full rounded-3xl border-2 border-slate-600 bg-slate-900 p-3 shadow-2xl shadow-black/50 ring-1 ring-white/10"
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(10, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(10, minmax(0, 1fr))`,
+          gap: BOARD_GAP,
+        }}
+      >
+        {grid.map((row, r) =>
+          row.map((cell, c) => {
+            const pk = `${r}-${c}`;
+            const tint = previewTint?.get(pk) ?? null;
+            return (
+              <BoardCell
+                key={pk}
+                r={r}
+                c={c}
+                cell={cell}
+                clearingKeys={clearingKeys}
+                previewTint={tint}
+                dragPreviewActive={dragPreviewActive}
+              />
+            );
+          }),
+        )}
       </div>
     </div>
   );

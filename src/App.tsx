@@ -40,8 +40,10 @@ function parseCellId(id: string | undefined): { r: number; c: number } | null {
   return { r, c };
 }
 
-/** Extra vertical offset while dragging on touch so the piece clears the finger. */
+/** Base vertical offset while dragging on touch (hand → board path). */
 const DRAG_TOUCH_LIFT_PX = 96;
+/** Extra lift only while the preview is over the grid — finger often covers the board. */
+const DRAG_TOUCH_EXTRA_OVER_BOARD_PX = 40;
 
 function isTouchLikeActivator(event: Event | null): boolean {
   if (!event) return false;
@@ -75,31 +77,32 @@ export default function App() {
     cells: [number, number][];
     valid: boolean;
   } | null>(null);
-  /** Drives the board-only placement ghost (same anchor as preview / drop). */
-  const [ghostAnchor, setGhostAnchor] = useState<{ r: number; c: number } | null>(null);
-
   /** Last board anchor while dragging — touch often clears `over` on release before `onDragEnd` */
   const lastBoardAnchorRef = useRef<{ r: number; c: number } | null>(null);
 
   /** Touch-only lift applied to drag transform (visual only — not used for hit-testing). */
   const dragTouchLiftPxRef = useRef(0);
+  /** True while `over` is a grid cell — adds extra vertical lift so the overlay clears the finger on the board. */
+  const dragTouchOverBoardRef = useRef(false);
 
   /** Touch sometimes omits `pointerCoordinates`; keep last screen point for collision. */
   const lastPointerScreenRef = useRef<{ x: number; y: number } | null>(null);
 
   const liftTouchPieces: Modifier = useMemo(
     () => (args) => {
-      const lift = dragTouchLiftPxRef.current;
+      let lift = dragTouchLiftPxRef.current;
       if (!lift) return args.transform;
+      if (dragTouchOverBoardRef.current) {
+        lift += DRAG_TOUCH_EXTRA_OVER_BOARD_PX;
+      }
       return { ...args.transform, y: args.transform.y - lift };
     },
     [],
   );
 
   /**
-   * Prefer the real pointer for which cell is active. (Do not subtract touch lift here: the
-   * overlay is snapped on the board, so a lifted test point often sits above the grid and
-   * freezes `over`.) If the runtime omits coordinates, reuse the last known point.
+   * Prefer the real pointer for which cell is active (touch lift is visual-only, not applied
+   * here). If the runtime omits coordinates, reuse the last known point.
    */
   const cellCollisionPointerFirst = useMemo<CollisionDetection>(
     () => (args) => {
@@ -176,10 +179,10 @@ export default function App() {
     dragTouchLiftPxRef.current = isTouchLikeActivator(event.activatorEvent)
       ? DRAG_TOUCH_LIFT_PX
       : 0;
+    dragTouchOverBoardRef.current = false;
     const p = event.active.data.current?.piece as PieceDef | undefined;
     setDragPiece(p ?? null);
     setPlacementPreview(null);
-    setGhostAnchor(null);
     lastBoardAnchorRef.current = null;
     lastPointerScreenRef.current = null;
   }, []);
@@ -188,7 +191,7 @@ export default function App() {
     (event: DragMoveEvent) => {
       if (interactionLocked) {
         setPlacementPreview(null);
-        setGhostAnchor(null);
+        dragTouchOverBoardRef.current = false;
         lastBoardAnchorRef.current = null;
         lastPointerScreenRef.current = null;
         return;
@@ -196,7 +199,7 @@ export default function App() {
       const piece = event.active.data.current?.piece as PieceDef | undefined;
       if (!piece) {
         setPlacementPreview(null);
-        setGhostAnchor(null);
+        dragTouchOverBoardRef.current = false;
         lastBoardAnchorRef.current = null;
         lastPointerScreenRef.current = null;
         return;
@@ -206,6 +209,7 @@ export default function App() {
       const pos = parseCellId(overId);
 
       if (pos) {
+        dragTouchOverBoardRef.current = true;
         const valid = canPlacePieceAt(piece, grid, pos.r, pos.c);
         const seen = new Set<string>();
         const cells: [number, number][] = [];
@@ -218,14 +222,13 @@ export default function App() {
           cells.push([r, c]);
         }
         setPlacementPreview({ cells, valid });
-        setGhostAnchor(pos);
         lastBoardAnchorRef.current = pos;
         return;
       }
 
       if (overId?.startsWith("hand-")) {
         setPlacementPreview(null);
-        setGhostAnchor(null);
+        dragTouchOverBoardRef.current = false;
         lastBoardAnchorRef.current = null;
         return;
       }
@@ -238,8 +241,8 @@ export default function App() {
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
       dragTouchLiftPxRef.current = 0;
+      dragTouchOverBoardRef.current = false;
       lastPointerScreenRef.current = null;
-      setGhostAnchor(null);
       const handIndex = event.active.data.current?.handIndex as number | undefined;
       const overId = event.over?.id?.toString();
       let pos = parseCellId(overId);
@@ -260,8 +263,8 @@ export default function App() {
 
   const onDragCancel = useCallback(() => {
     dragTouchLiftPxRef.current = 0;
+    dragTouchOverBoardRef.current = false;
     lastPointerScreenRef.current = null;
-    setGhostAnchor(null);
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
     setDragPiece(null);
@@ -322,13 +325,6 @@ export default function App() {
             previewTint={previewTint}
             dragPreviewActive={placementPreview != null}
             onCellMetrics={handleCellMetrics}
-            cellSizePx={cellMetrics.cellSizePx}
-            gapPx={cellMetrics.gapPx}
-            placementGhost={
-              dragPiece && ghostAnchor
-                ? { piece: dragPiece, anchor: ghostAnchor }
-                : null
-            }
           />
 
           <section
@@ -371,20 +367,12 @@ export default function App() {
       </div>
 
       <DragOverlay dropAnimation={null} zIndex={500}>
-        {/*
-          Over the board the visible piece is drawn on the grid (placementGhost); keep an invisible
-          overlay so dnd-kit still measures a stable drag rect and collision tracks the pointer.
-        */}
         {dragPiece ? (
           <PiecePreview
             piece={dragPiece}
             cellSizePx={cellMetrics.cellSizePx}
             gapPx={cellMetrics.gapPx}
-            className={
-              placementPreview != null
-                ? "pointer-events-none opacity-0"
-                : "drop-shadow-2xl"
-            }
+            className="pointer-events-none drop-shadow-2xl"
           />
         ) : null}
       </DragOverlay>
