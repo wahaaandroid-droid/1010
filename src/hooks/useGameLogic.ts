@@ -17,7 +17,7 @@ export interface PieceDef {
   cells: [number, number][];
 }
 
-const GRID_SIZE = 10;
+export const GRID_SIZE = 10;
 const HAND_SIZE = 3;
 const BEST_KEY = "1010-best-score";
 
@@ -83,7 +83,7 @@ function emptyGrid(): GridCell[][] {
   );
 }
 
-function canPlaceAt(
+export function canPlacePieceAt(
   piece: PieceDef,
   grid: GridCell[][],
   anchorR: number,
@@ -101,7 +101,7 @@ function canPlaceAt(
 function hasAnyPlacement(piece: PieceDef, grid: GridCell[][]): boolean {
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
-      if (canPlaceAt(piece, grid, r, c)) return true;
+      if (canPlacePieceAt(piece, grid, r, c)) return true;
     }
   }
   return false;
@@ -207,7 +207,7 @@ export function useGameLogic() {
       if (gameOver || clearingKeys) return false;
       const piece = hand[handIndex];
       if (!piece) return false;
-      if (!canPlaceAt(piece, grid, anchorR, anchorC)) return false;
+      if (!canPlacePieceAt(piece, grid, anchorR, anchorC)) return false;
 
       const placed = cloneGrid(grid);
       for (const [dr, dc] of piece.cells) {

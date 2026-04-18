@@ -3,9 +3,6 @@ import { KIND_TO_COLOR } from "../hooks/useGameLogic";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
-const CELL_PX = 14;
-const GAP_PX = 2;
-
 function bounds(cells: [number, number][]) {
   let maxR = 0;
   let maxC = 0;
@@ -16,38 +13,47 @@ function bounds(cells: [number, number][]) {
   return { rows: maxR + 1, cols: maxC + 1 };
 }
 
+/** Matches board cells: full slot = cellSizePx, inner block inset 3px each side */
+const BOARD_INSET_TOTAL = 6;
+
 export interface PiecePreviewProps {
   piece: PieceDef;
   /** When true (e.g. DragOverlay), lift preview above finger */
   dragLift?: boolean;
   className?: string;
+  /** Measured from board grid — same as placed blocks */
+  cellSizePx?: number;
+  gapPx?: number;
 }
 
-/** Static mini-grid preview of a piece (no DnD). */
+/** Mini-grid preview of a piece (no DnD). */
 export function PiecePreview({
   piece,
   dragLift = false,
   className = "",
+  cellSizePx = 28,
+  gapPx = 5,
 }: PiecePreviewProps) {
   const { rows, cols } = bounds(piece.cells);
   const color = KIND_TO_COLOR[piece.kind as ShapeKind];
   const occupied = new Set(piece.cells.map(([r, c]) => `${r}-${c}`));
+  const inner = Math.max(2, cellSizePx - BOARD_INSET_TOTAL);
 
   return (
     <div
       className={`relative select-none ${className}`}
       style={{
-        width: cols * CELL_PX + (cols - 1) * GAP_PX,
-        height: rows * CELL_PX + (rows - 1) * GAP_PX,
+        width: cols * cellSizePx + (cols - 1) * gapPx,
+        height: rows * cellSizePx + (rows - 1) * gapPx,
         transform: dragLift ? "translateY(-80px)" : undefined,
       }}
     >
       <div
         className="grid h-full w-full"
         style={{
-          gridTemplateColumns: `repeat(${cols}, ${CELL_PX}px)`,
-          gridTemplateRows: `repeat(${rows}, ${CELL_PX}px)`,
-          gap: GAP_PX,
+          gridTemplateColumns: `repeat(${cols}, ${cellSizePx}px)`,
+          gridTemplateRows: `repeat(${rows}, ${cellSizePx}px)`,
+          gap: gapPx,
         }}
       >
         {Array.from({ length: rows * cols }, (_, i) => {
@@ -57,12 +63,21 @@ export function PiecePreview({
           return (
             <div
               key={`${r}-${c}`}
-              className={
-                on
-                  ? `rounded-sm shadow-inner ${color}`
-                  : "rounded-sm bg-slate-800/40"
-              }
-            />
+              className="flex items-center justify-center"
+              style={{ width: cellSizePx, height: cellSizePx }}
+            >
+              {on ? (
+                <div
+                  className={`rounded-md shadow-md ${color}`}
+                  style={{ width: inner, height: inner }}
+                />
+              ) : (
+                <div
+                  className="rounded-sm bg-slate-800/40"
+                  style={{ width: inner, height: inner }}
+                />
+              )}
+            </div>
           );
         })}
       </div>
@@ -74,9 +89,17 @@ export interface HandPieceProps {
   piece: PieceDef | null;
   handIndex: number;
   disabled?: boolean;
+  cellSizePx?: number;
+  gapPx?: number;
 }
 
-export function HandPiece({ piece, handIndex, disabled }: HandPieceProps) {
+export function HandPiece({
+  piece,
+  handIndex,
+  disabled,
+  cellSizePx = 28,
+  gapPx = 5,
+}: HandPieceProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: `hand-${handIndex}`,
@@ -96,9 +119,13 @@ export function HandPiece({ piece, handIndex, disabled }: HandPieceProps) {
       style={style}
       {...listeners}
       {...attributes}
-      className="flex min-h-[88px] min-w-[88px] items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-900/80 px-2 py-3 shadow-lg"
+      className="flex items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-900/80 p-3 shadow-lg"
     >
-      {piece ? <PiecePreview piece={piece} /> : <span className="text-slate-500">—</span>}
+      {piece ? (
+        <PiecePreview piece={piece} cellSizePx={cellSizePx} gapPx={gapPx} />
+      ) : (
+        <span className="text-slate-500">—</span>
+      )}
     </div>
   );
 }

@@ -6,13 +6,18 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { useCallback, useState } from "react";
-import { Board } from "./components/Board";
+import { useCallback, useMemo, useState } from "react";
+import { Board, type CellMetrics } from "./components/Board";
 import { HandPiece, PiecePreview } from "./components/Piece";
 import type { PieceDef } from "./hooks/useGameLogic";
-import { useGameLogic } from "./hooks/useGameLogic";
+import {
+  GRID_SIZE,
+  canPlacePieceAt,
+  useGameLogic,
+} from "./hooks/useGameLogic";
 
 function parseCellId(id: string | undefined): { r: number; c: number } | null {
   if (!id || !id.startsWith("cell-")) return null;
@@ -24,6 +29,8 @@ function parseCellId(id: string | undefined): { r: number; c: number } | null {
   if (Number.isNaN(r) || Number.isNaN(c)) return null;
   return { r, c };
 }
+
+const DEFAULT_METRICS: CellMetrics = { cellSizePx: 28, gapPx: 5.6 };
 
 export default function App() {
   const {
@@ -39,6 +46,11 @@ export default function App() {
   } = useGameLogic();
 
   const [activePiece, setActivePiece] = useState<PieceDef | null>(null);
+  const [cellMetrics, setCellMetrics] = useState<CellMetrics>(DEFAULT_METRICS);
+  const [placementPreview, setPlacementPreview] = useState<{
+    cells: [number, number][];
+    valid: boolean;
+  } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -51,14 +63,62 @@ export default function App() {
 
   const interactionLocked = gameOver || clearingKeys != null;
 
+  const previewTint = useMemo(() => {
+    if (!placementPreview) return null;
+    const m = new Map<string, "valid" | "invalid">();
+    for (const [r, c] of placementPreview.cells) {
+      if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
+        m.set(`${r}-${c}`, placementPreview.valid ? "valid" : "invalid");
+      }
+    }
+    return m;
+  }, [placementPreview]);
+
+  const handleCellMetrics = useCallback((m: CellMetrics) => {
+    setCellMetrics((prev) =>
+      Math.abs(prev.cellSizePx - m.cellSizePx) < 0.25 &&
+      Math.abs(prev.gapPx - m.gapPx) < 0.05
+        ? prev
+        : m,
+    );
+  }, []);
+
   const onDragStart = useCallback((event: DragStartEvent) => {
     const p = event.active.data.current?.piece as PieceDef | undefined;
     setActivePiece(p ?? null);
+    setPlacementPreview(null);
   }, []);
+
+  const onDragMove = useCallback(
+    (event: DragMoveEvent) => {
+      if (interactionLocked) {
+        setPlacementPreview(null);
+        return;
+      }
+      const piece = event.active.data.current?.piece as PieceDef | undefined;
+      if (!piece) {
+        setPlacementPreview(null);
+        return;
+      }
+      const overId = event.over?.id?.toString();
+      const pos = parseCellId(overId);
+      if (!pos) {
+        setPlacementPreview(null);
+        return;
+      }
+      const valid = canPlacePieceAt(piece, grid, pos.r, pos.c);
+      const cells = piece.cells.map(
+        ([dr, dc]) => [pos.r + dr, pos.c + dc] as [number, number],
+      );
+      setPlacementPreview({ cells, valid });
+    },
+    [grid, interactionLocked],
+  );
 
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
       setActivePiece(null);
+      setPlacementPreview(null);
       if (interactionLocked) return;
       const handIndex = event.active.data.current?.handIndex as number | undefined;
       const overId = event.over?.id?.toString();
@@ -69,12 +129,16 @@ export default function App() {
     [interactionLocked, placePiece],
   );
 
-  const onDragCancel = useCallback(() => setActivePiece(null), []);
+  const onDragCancel = useCallback(() => {
+    setActivePiece(null);
+    setPlacementPreview(null);
+  }, []);
 
   return (
     <DndContext
       sensors={sensors}
       onDragStart={onDragStart}
+      onDragMove={onDragMove}
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
     >
@@ -117,10 +181,15 @@ export default function App() {
         </header>
 
         <main className="flex flex-1 flex-col items-center justify-center gap-5">
-          <Board grid={grid} clearingKeys={clearingKeys} />
+          <Board
+            grid={grid}
+            clearingKeys={clearingKeys}
+            previewTint={previewTint}
+            onCellMetrics={handleCellMetrics}
+          />
 
           <section
-            className="flex w-full max-w-md items-end justify-center gap-3"
+            className="flex w-full max-w-md flex-wrap items-end justify-center gap-3"
             aria-label="Hand"
           >
             {Array.from({ length: handSize }, (_, i) => (
@@ -129,6 +198,8 @@ export default function App() {
                 handIndex={i}
                 piece={hand[i] ?? null}
                 disabled={interactionLocked}
+                cellSizePx={cellMetrics.cellSizePx}
+                gapPx={cellMetrics.gapPx}
               />
             ))}
           </section>
@@ -157,7 +228,14 @@ export default function App() {
       </div>
 
       <DragOverlay dropAnimation={null}>
-        {activePiece ? <PiecePreview piece={activePiece} dragLift /> : null}
+        {activePiece ? (
+          <PiecePreview
+            piece={activePiece}
+            dragLift
+            cellSizePx={cellMetrics.cellSizePx}
+            gapPx={cellMetrics.gapPx}
+          />
+        ) : null}
       </DragOverlay>
     </DndContext>
   );
