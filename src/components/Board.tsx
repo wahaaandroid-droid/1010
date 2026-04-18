@@ -50,8 +50,8 @@ function BoardCell({
 
   const placedBlockClass = [
     "absolute inset-[2px] rounded-md",
-    "shadow-[0_4px_16px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.35)]",
-    "ring-2 ring-white/45 border border-slate-950/50",
+    "shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]",
+    "ring-2 ring-white/45 border border-white/20",
     color,
   ].join(" ");
 

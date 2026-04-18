@@ -419,7 +419,7 @@ export default function App() {
             piece={dragPiece}
             cellSizePx={cellMetrics.cellSizePx}
             gapPx={cellMetrics.gapPx}
-            className="pointer-events-none relative z-[10001] drop-shadow-2xl"
+            className="pointer-events-none relative z-[10001] opacity-70"
           />
         ) : null}
       </DragOverlay>

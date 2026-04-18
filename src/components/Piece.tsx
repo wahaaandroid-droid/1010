@@ -64,13 +64,14 @@ export function PiecePreview({
             >
               {on ? (
                 <div
-                  className={`rounded-md shadow-[0_3px_10px_rgba(0,0,0,0.5)] ring-1 ring-white/35 ${color}`}
+                  className={`rounded-md ring-1 ring-white/40 ${color}`}
                   style={{ width: inner, height: inner }}
                 />
               ) : (
                 <div
-                  className="rounded-sm border border-slate-600/50 bg-slate-800/80"
+                  className="rounded-sm border border-transparent bg-transparent"
                   style={{ width: inner, height: inner }}
+                  aria-hidden
                 />
               )}
             </div>
