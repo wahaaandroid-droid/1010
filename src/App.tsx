@@ -328,7 +328,7 @@ export default function App() {
     >
       <div
         className="flex min-h-[100svh] flex-col gap-4 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]"
-        style={{ touchAction: "none" }}
+        style={{ touchAction: "none", overflowAnchor: "none" }}
       >
         <header className="flex flex-shrink-0 items-center justify-between gap-3">
           <div>

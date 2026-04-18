@@ -103,11 +103,18 @@ export function HandPiece({
     data: { handIndex, piece },
   });
 
+  // Keep hand slots a constant size so replenishing pieces does not reflow/scroll-jump.
+  const maxCells = 4;
+  const previewBoxPx = maxCells * cellSizePx + (maxCells - 1) * gapPx;
+  const paddingPx = 12; // Tailwind p-3
+
   /* Do not translate the hand slot — DragOverlay follows the pointer so the grid preview stays aligned */
   const style: CSSProperties = {
     opacity: isDragging ? 0.42 : 1,
     touchAction: "none",
     cursor: disabled || piece == null ? "default" : isDragging ? "grabbing" : "grab",
+    width: previewBoxPx + paddingPx * 2,
+    height: previewBoxPx + paddingPx * 2,
   };
 
   return (
