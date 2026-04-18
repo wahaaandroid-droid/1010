@@ -11,12 +11,13 @@ import {
   type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
+  type Modifier,
 } from "@dnd-kit/core";
 import { snapCenterToCursor } from "@dnd-kit/modifiers";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Board, type CellMetrics } from "./components/Board";
 import { HandPiece, PiecePreview } from "./components/Piece";
-import { resumeAudio } from "./audio/gameSounds";
+import { attachAudioUserGestureUnlock, resumeAudio } from "./audio/gameSounds";
 import type { PieceDef } from "./hooks/useGameLogic";
 import {
   GRID_SIZE,
@@ -37,11 +38,19 @@ function parseCellId(id: string | undefined): { r: number; c: number } | null {
   return { r, c };
 }
 
-const cellCollision: CollisionDetection = (args) => {
-  const hits = pointerWithin(args);
-  if (hits.length > 0) return hits;
-  return rectIntersection(args);
-};
+/** Extra vertical offset while dragging on touch so the piece clears the finger. */
+const DRAG_TOUCH_LIFT_PX = 96;
+
+function isTouchLikeActivator(event: Event | null): boolean {
+  if (!event) return false;
+  if ("pointerType" in event && (event as PointerEvent).pointerType === "touch") {
+    return true;
+  }
+  if ("touches" in event) {
+    return true;
+  }
+  return false;
+}
 
 const DEFAULT_METRICS: CellMetrics = { cellSizePx: 28, gapPx: 5.6 };
 
@@ -68,6 +77,45 @@ export default function App() {
   /** Last board anchor while dragging — touch often clears `over` on release before `onDragEnd` */
   const lastBoardAnchorRef = useRef<{ r: number; c: number } | null>(null);
 
+  /** Touch-only lift applied to drag transform + collision (see `liftTouchPieces` / `cellCollisionWithTouchLift`). */
+  const dragTouchLiftPxRef = useRef(0);
+
+  const liftTouchPieces: Modifier = useMemo(
+    () => (args) => {
+      const lift = dragTouchLiftPxRef.current;
+      if (!lift) return args.transform;
+      return { ...args.transform, y: args.transform.y - lift };
+    },
+    [],
+  );
+
+  const cellCollisionWithTouchLift = useMemo<CollisionDetection>(
+    () => (args) => {
+      const lift = dragTouchLiftPxRef.current;
+      const pc = args.pointerCoordinates;
+
+      if (lift === 0) {
+        const hits = pointerWithin(args);
+        if (hits.length > 0) return hits;
+        return rectIntersection(args);
+      }
+
+      const rectHits = rectIntersection(args);
+      if (rectHits.length > 0) return rectHits;
+
+      if (pc) {
+        const liftedHits = pointerWithin({
+          ...args,
+          pointerCoordinates: { x: pc.x, y: pc.y - lift },
+        });
+        if (liftedHits.length > 0) return liftedHits;
+      }
+
+      return pointerWithin(args);
+    },
+    [],
+  );
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 },
@@ -76,6 +124,8 @@ export default function App() {
       activationConstraint: { delay: 0, tolerance: 12 },
     }),
   );
+
+  useEffect(() => attachAudioUserGestureUnlock(document), []);
 
   const interactionLocked = gameOver || clearingKeys != null;
 
@@ -102,6 +152,9 @@ export default function App() {
 
   const onDragStart = useCallback((event: DragStartEvent) => {
     resumeAudio();
+    dragTouchLiftPxRef.current = isTouchLikeActivator(event.activatorEvent)
+      ? DRAG_TOUCH_LIFT_PX
+      : 0;
     const p = event.active.data.current?.piece as PieceDef | undefined;
     setDragPiece(p ?? null);
     setPlacementPreview(null);
@@ -155,6 +208,7 @@ export default function App() {
 
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
+      dragTouchLiftPxRef.current = 0;
       const handIndex = event.active.data.current?.handIndex as number | undefined;
       const overId = event.over?.id?.toString();
       let pos = parseCellId(overId);
@@ -174,6 +228,7 @@ export default function App() {
   );
 
   const onDragCancel = useCallback(() => {
+    dragTouchLiftPxRef.current = 0;
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
     setDragPiece(null);
@@ -182,8 +237,8 @@ export default function App() {
   return (
     <DndContext
       sensors={sensors}
-      modifiers={[snapCenterToCursor]}
-      collisionDetection={cellCollision}
+      modifiers={[snapCenterToCursor, liftTouchPieces]}
+      collisionDetection={cellCollisionWithTouchLift}
       onDragStart={onDragStart}
       onDragMove={onDragMove}
       onDragEnd={onDragEnd}
@@ -277,10 +332,10 @@ export default function App() {
 
       <DragOverlay dropAnimation={null} zIndex={500}>
         {/*
-          On the grid, only cell highlights (placementPreview) — no second “floating” piece.
-          Between hand and board, overlay follows the finger center (snapCenterToCursor).
+          Keep the floating piece visible over the board too (touch lift keeps it clear of the finger).
+          Cell tint (placementPreview) still shows valid/invalid placement.
         */}
-        {dragPiece && placementPreview == null ? (
+        {dragPiece ? (
           <PiecePreview
             piece={dragPiece}
             cellSizePx={cellMetrics.cellSizePx}
