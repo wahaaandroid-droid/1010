@@ -12,6 +12,7 @@ import {
   type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { snapCenterToCursor } from "@dnd-kit/modifiers";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Board, type CellMetrics } from "./components/Board";
 import { HandPiece, PiecePreview } from "./components/Piece";
@@ -181,6 +182,7 @@ export default function App() {
   return (
     <DndContext
       sensors={sensors}
+      modifiers={[snapCenterToCursor]}
       collisionDetection={cellCollision}
       onDragStart={onDragStart}
       onDragMove={onDragMove}
@@ -274,7 +276,11 @@ export default function App() {
       </div>
 
       <DragOverlay dropAnimation={null} zIndex={500}>
-        {dragPiece ? (
+        {/*
+          On the grid, only cell highlights (placementPreview) — no second “floating” piece.
+          Between hand and board, overlay follows the finger center (snapCenterToCursor).
+        */}
+        {dragPiece && placementPreview == null ? (
           <PiecePreview
             piece={dragPiece}
             cellSizePx={cellMetrics.cellSizePx}
