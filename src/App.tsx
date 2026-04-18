@@ -1,18 +1,15 @@
 import {
   DndContext,
-  DragOverlay,
   PointerSensor,
   TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragMoveEvent,
-  type DragStartEvent,
 } from "@dnd-kit/core";
-import { createPortal } from "react-dom";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Board, type CellMetrics } from "./components/Board";
-import { HandPiece, PiecePreview } from "./components/Piece";
+import { HandPiece } from "./components/Piece";
 import type { PieceDef } from "./hooks/useGameLogic";
 import {
   GRID_SIZE,
@@ -46,17 +43,14 @@ export default function App() {
     handSize,
   } = useGameLogic();
 
-  const [activePiece, setActivePiece] = useState<PieceDef | null>(null);
   const [cellMetrics, setCellMetrics] = useState<CellMetrics>(DEFAULT_METRICS);
   const [placementPreview, setPlacementPreview] = useState<{
     cells: [number, number][];
     valid: boolean;
   } | null>(null);
-  /** Screen position for piece preview snapped to anchor cell (board coordinates) */
-  const [boardGhostPos, setBoardGhostPos] = useState<{
-    left: number;
-    top: number;
-  } | null>(null);
+
+  /** Last board anchor while dragging — touch often clears `over` on release before `onDragEnd` */
+  const lastBoardAnchorRef = useRef<{ r: number; c: number } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -89,66 +83,62 @@ export default function App() {
     );
   }, []);
 
-  const onDragStart = useCallback((event: DragStartEvent) => {
-    const p = event.active.data.current?.piece as PieceDef | undefined;
-    setActivePiece(p ?? null);
+  const onDragStart = useCallback(() => {
     setPlacementPreview(null);
-    setBoardGhostPos(null);
+    lastBoardAnchorRef.current = null;
   }, []);
 
   const onDragMove = useCallback(
     (event: DragMoveEvent) => {
       if (interactionLocked) {
         setPlacementPreview(null);
-        setBoardGhostPos(null);
+        lastBoardAnchorRef.current = null;
         return;
       }
       const piece = event.active.data.current?.piece as PieceDef | undefined;
       if (!piece) {
         setPlacementPreview(null);
-        setBoardGhostPos(null);
+        lastBoardAnchorRef.current = null;
         return;
       }
+
       const overId = event.over?.id?.toString();
       const pos = parseCellId(overId);
-      if (!pos) {
-        setPlacementPreview(null);
-        setBoardGhostPos(null);
+
+      if (pos) {
+        const valid = canPlacePieceAt(piece, grid, pos.r, pos.c);
+        const cells = piece.cells.map(
+          ([dr, dc]) => [pos.r + dr, pos.c + dc] as [number, number],
+        );
+        setPlacementPreview({ cells, valid });
+        lastBoardAnchorRef.current = pos;
         return;
       }
-      const valid = canPlacePieceAt(piece, grid, pos.r, pos.c);
-      const cells = piece.cells.map(
-        ([dr, dc]) => [pos.r + dr, pos.c + dc] as [number, number],
-      );
-      setPlacementPreview({ cells, valid });
-      const anchorR = pos.r;
-      const anchorC = pos.c;
-      const selector = `[data-board-cell="${anchorR}-${anchorC}"]`;
-      const applyGhost = () => {
-        const el = document.querySelector(selector);
-        if (!el) return false;
-        const rect = el.getBoundingClientRect();
-        setBoardGhostPos({ left: rect.left, top: rect.top });
-        return true;
-      };
-      if (!applyGhost()) {
-        requestAnimationFrame(() => {
-          if (!applyGhost()) setBoardGhostPos(null);
-        });
+
+      if (overId?.startsWith("hand-")) {
+        setPlacementPreview(null);
+        lastBoardAnchorRef.current = null;
+        return;
       }
+
+      /* `over` null (finger between cells / iOS): keep last preview & anchor */
     },
     [grid, interactionLocked],
   );
 
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
-      setActivePiece(null);
-      setPlacementPreview(null);
-      setBoardGhostPos(null);
-      if (interactionLocked) return;
       const handIndex = event.active.data.current?.handIndex as number | undefined;
       const overId = event.over?.id?.toString();
-      const pos = parseCellId(overId);
+      let pos = parseCellId(overId);
+      if (pos == null && !overId && lastBoardAnchorRef.current != null) {
+        pos = lastBoardAnchorRef.current;
+      }
+
+      setPlacementPreview(null);
+      lastBoardAnchorRef.current = null;
+
+      if (interactionLocked) return;
       if (handIndex == null || pos == null) return;
       placePiece(handIndex, pos.r, pos.c);
     },
@@ -156,30 +146,9 @@ export default function App() {
   );
 
   const onDragCancel = useCallback(() => {
-    setActivePiece(null);
     setPlacementPreview(null);
-    setBoardGhostPos(null);
+    lastBoardAnchorRef.current = null;
   }, []);
-
-  const snappedBoardGhost =
-    activePiece &&
-    boardGhostPos &&
-    createPortal(
-      <div
-        className="pointer-events-none fixed z-[460]"
-        style={{
-          left: boardGhostPos.left,
-          top: boardGhostPos.top,
-        }}
-      >
-        <PiecePreview
-          piece={activePiece}
-          cellSizePx={cellMetrics.cellSizePx}
-          gapPx={cellMetrics.gapPx}
-        />
-      </div>,
-      document.body,
-    );
 
   return (
     <DndContext
@@ -273,19 +242,6 @@ export default function App() {
           </div>
         ) : null}
       </div>
-
-      {snappedBoardGhost}
-
-      <DragOverlay dropAnimation={null}>
-        {activePiece && !placementPreview ? (
-          <PiecePreview
-            piece={activePiece}
-            dragLift
-            cellSizePx={cellMetrics.cellSizePx}
-            gapPx={cellMetrics.gapPx}
-          />
-        ) : null}
-      </DragOverlay>
     </DndContext>
   );
 }

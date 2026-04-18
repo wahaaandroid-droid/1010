@@ -18,8 +18,6 @@ const BOARD_INSET_TOTAL = 6;
 
 export interface PiecePreviewProps {
   piece: PieceDef;
-  /** When true (e.g. DragOverlay), lift preview above finger */
-  dragLift?: boolean;
   className?: string;
   /** Measured from board grid — same as placed blocks */
   cellSizePx?: number;
@@ -29,7 +27,6 @@ export interface PiecePreviewProps {
 /** Mini-grid preview of a piece (no DnD). */
 export function PiecePreview({
   piece,
-  dragLift = false,
   className = "",
   cellSizePx = 28,
   gapPx = 5,
@@ -45,7 +42,6 @@ export function PiecePreview({
       style={{
         width: cols * cellSizePx + (cols - 1) * gapPx,
         height: rows * cellSizePx + (rows - 1) * gapPx,
-        transform: dragLift ? "translateY(-80px)" : undefined,
       }}
     >
       <div
