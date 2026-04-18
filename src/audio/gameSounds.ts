@@ -10,6 +10,35 @@
 
 let ctxRef: AudioContext | null = null;
 
+const SOUND_ENABLED_STORAGE_KEY = "1010-sound-enabled";
+
+function readStoredSoundEnabled(): boolean {
+  if (typeof localStorage === "undefined") return true;
+  try {
+    const raw = localStorage.getItem(SOUND_ENABLED_STORAGE_KEY);
+    if (raw == null) return true;
+    return raw !== "0" && raw !== "false";
+  } catch {
+    return true;
+  }
+}
+
+let soundEnabled = readStoredSoundEnabled();
+
+export function isGameSoundEnabled(): boolean {
+  return soundEnabled;
+}
+
+export function setGameSoundEnabled(on: boolean): void {
+  soundEnabled = on;
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(SOUND_ENABLED_STORAGE_KEY, on ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
 type AudioContextCtor = typeof AudioContext;
 
 function getAudioContextConstructor(): AudioContextCtor | null {
@@ -227,11 +256,13 @@ function beep(
 
 /** Block settled on the grid */
 export function playPlaceSound(): void {
+  if (!soundEnabled) return;
   runWithAudio((ctx) => beep(ctx, 280, 0.07, "sine", 0.11, 160));
 }
 
 /** One or more full lines cleared */
 export function playClearSound(lineCount: number): void {
+  if (!soundEnabled) return;
   runWithAudio((ctx) => {
     const n = Math.min(Math.max(lineCount, 1), 5);
     const t0 = ctx.currentTime;

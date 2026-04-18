@@ -26,7 +26,12 @@ import {
 } from "react";
 import { Board, type CellMetrics } from "./components/Board";
 import { HandPiece, PiecePreview } from "./components/Piece";
-import { attachAudioUserGestureUnlock, resumeAudio } from "./audio/gameSounds";
+import {
+  attachAudioUserGestureUnlock,
+  isGameSoundEnabled,
+  resumeAudio,
+  setGameSoundEnabled,
+} from "./audio/gameSounds";
 import type { PieceDef } from "./hooks/useGameLogic";
 import {
   GRID_SIZE,
@@ -110,6 +115,9 @@ export default function App() {
     resetGame,
     handSize,
   } = useGameLogic();
+
+  const [soundOn, setSoundOn] = useState(() => isGameSoundEnabled());
+  const didBootstrapResetRef = useRef(false);
 
   const [cellMetrics, setCellMetrics] = useState<CellMetrics>(DEFAULT_METRICS);
   const [handCellMetrics, setHandCellMetrics] =
@@ -212,6 +220,27 @@ export default function App() {
   );
 
   useEffect(() => attachAudioUserGestureUnlock(document), []);
+
+  /** Same as tapping Reset on load (requested for iOS audio readiness). */
+  useEffect(() => {
+    if (didBootstrapResetRef.current) return;
+    didBootstrapResetRef.current = true;
+    resetGame();
+  }, [resetGame]);
+
+  const onResetFromUser = useCallback(() => {
+    resumeAudio();
+    resetGame();
+  }, [resetGame]);
+
+  const onToggleSound = useCallback(() => {
+    resumeAudio();
+    setSoundOn((prev) => {
+      const next = !prev;
+      setGameSoundEnabled(next);
+      return next;
+    });
+  }, []);
 
   useLayoutEffect(() => {
     const el = handSectionRef.current;
@@ -406,7 +435,19 @@ export default function App() {
             </div>
             <button
               type="button"
-              onClick={resetGame}
+              onClick={onToggleSound}
+              aria-pressed={soundOn}
+              aria-label={soundOn ? "Turn sound off" : "Turn sound on"}
+              className="rounded-2xl border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-medium leading-tight text-slate-100 shadow active:scale-[0.98] sm:text-sm"
+            >
+              <span className="block text-[10px] uppercase tracking-wider text-slate-500">
+                Sound
+              </span>
+              {soundOn ? "On" : "Off"}
+            </button>
+            <button
+              type="button"
+              onClick={onResetFromUser}
               className="rounded-2xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 shadow active:scale-[0.98]"
             >
               Reset
@@ -457,7 +498,7 @@ export default function App() {
               </p>
               <button
                 type="button"
-                onClick={resetGame}
+                onClick={onResetFromUser}
                 className="mt-6 w-full rounded-2xl bg-cyan-500 py-3 text-base font-semibold text-slate-950 shadow-lg active:scale-[0.99]"
               >
                 Play again
