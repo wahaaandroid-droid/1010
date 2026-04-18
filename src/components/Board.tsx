@@ -43,6 +43,7 @@ function BoardCell({
   return (
     <div
       ref={setNodeRef}
+      data-board-cell={`${r}-${c}`}
       className={`relative aspect-square rounded-lg border transition-colors ${borderClass}`}
     >
       {filled ? (
