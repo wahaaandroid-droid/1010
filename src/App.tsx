@@ -403,7 +403,7 @@ export default function App() {
             cellSizePx={cellMetrics.cellSizePx}
             gapPx={cellMetrics.gapPx}
             className={`pointer-events-none drop-shadow-2xl ${
-              placementPreview != null ? "opacity-50" : "opacity-95"
+              placementPreview != null ? "opacity-0" : "opacity-95"
             }`}
           />
         ) : null}
