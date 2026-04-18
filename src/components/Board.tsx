@@ -37,11 +37,13 @@ function BoardCell({
   const showPointerHover =
     isOver && (!dragPreviewActive || previewTint != null);
 
+  const previewLift = previewTint != null ? "z-[5]" : "";
+
   const borderClass =
     previewTint === "valid"
-      ? "border-emerald-400 ring-2 ring-emerald-400/50 bg-emerald-500/20"
+      ? "border-emerald-300 bg-emerald-500/25 shadow-[0_0_20px_rgba(52,211,153,0.5)] ring-[3px] ring-emerald-300/95 ring-offset-2 ring-offset-slate-900/95"
       : previewTint === "invalid"
-        ? "border-red-400 ring-2 ring-red-400/50 bg-red-500/20"
+        ? "border-red-300 bg-red-500/25 shadow-[0_0_20px_rgba(248,113,113,0.45)] ring-[3px] ring-red-400/90 ring-offset-2 ring-offset-slate-900/95"
         : showPointerHover
           ? "border-cyan-300 bg-slate-600/70 ring-1 ring-cyan-400/40"
           : "border-slate-500/90 bg-slate-800/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
@@ -56,7 +58,7 @@ function BoardCell({
   return (
     <div
       ref={setNodeRef}
-      className={`relative aspect-square rounded-lg border-2 transition-colors ${borderClass}`}
+      className={`relative aspect-square rounded-lg border-2 transition-colors ${previewLift} ${borderClass}`}
     >
       {filled ? (
         <motion.div
@@ -71,7 +73,7 @@ function BoardCell({
       ) : null}
       {previewTint === "valid" && !filled ? (
         <div
-          className="pointer-events-none absolute inset-[2px] rounded-md bg-emerald-400/55 shadow-[inset_0_0_0_2px_rgba(16,185,129,1),0_0_12px_rgba(52,211,153,0.35)]"
+          className="pointer-events-none absolute inset-[2px] rounded-md bg-emerald-400/60 shadow-[inset_0_0_0_2px_rgba(255,255,255,0.55),0_0_14px_rgba(52,211,153,0.65)]"
           aria-hidden
         />
       ) : null}

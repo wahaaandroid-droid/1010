@@ -41,9 +41,14 @@ function parseCellId(id: string | undefined): { r: number; c: number } | null {
 }
 
 /** Base vertical offset while dragging on touch (hand → board path). */
-const DRAG_TOUCH_LIFT_PX = 96;
-/** Extra lift only while the preview is over the grid — finger often covers the board. */
-const DRAG_TOUCH_EXTRA_OVER_BOARD_PX = 40;
+const DRAG_TOUCH_LIFT_PX = 112;
+/** Extra lift while `over` is a grid cell — keep the floating piece above the thumb. */
+const DRAG_TOUCH_EXTRA_OVER_BOARD_PX = 88;
+/**
+ * Shift the overlay horizontally while over the board (visual only). Many users’ thumbs cover
+ * the lower-right of the contact point; nudging left clears a bit more of the piece + grid hint.
+ */
+const DRAG_TOUCH_SIDE_NUDGE_OVER_BOARD_PX = 44;
 
 function isTouchLikeActivator(event: Event | null): boolean {
   if (!event) return false;
@@ -90,12 +95,19 @@ export default function App() {
 
   const liftTouchPieces: Modifier = useMemo(
     () => (args) => {
-      let lift = dragTouchLiftPxRef.current;
-      if (!lift) return args.transform;
+      const baseLift = dragTouchLiftPxRef.current;
+      if (!baseLift) return args.transform;
+      let lift = baseLift;
+      let dx = 0;
       if (dragTouchOverBoardRef.current) {
         lift += DRAG_TOUCH_EXTRA_OVER_BOARD_PX;
+        dx -= DRAG_TOUCH_SIDE_NUDGE_OVER_BOARD_PX;
       }
-      return { ...args.transform, y: args.transform.y - lift };
+      return {
+        ...args.transform,
+        x: args.transform.x + dx,
+        y: args.transform.y - lift,
+      };
     },
     [],
   );
