@@ -2,14 +2,18 @@ import {
   DndContext,
   PointerSensor,
   TouchSensor,
+  pointerWithin,
+  rectIntersection,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
 } from "@dnd-kit/core";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Board, type CellMetrics } from "./components/Board";
 import { HandPiece } from "./components/Piece";
+import { resumeAudio } from "./audio/gameSounds";
 import type { PieceDef } from "./hooks/useGameLogic";
 import {
   GRID_SIZE,
@@ -17,6 +21,7 @@ import {
   useGameLogic,
 } from "./hooks/useGameLogic";
 
+/** Droppable ids are `cell-${r}-${c}` with r,c in 0..GRID_SIZE-1 */
 function parseCellId(id: string | undefined): { r: number; c: number } | null {
   if (!id || !id.startsWith("cell-")) return null;
   const rest = id.slice("cell-".length);
@@ -25,8 +30,15 @@ function parseCellId(id: string | undefined): { r: number; c: number } | null {
   const r = Number(parts[0]);
   const c = Number(parts[1]);
   if (Number.isNaN(r) || Number.isNaN(c)) return null;
+  if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) return null;
   return { r, c };
 }
+
+const cellCollision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  if (hits.length > 0) return hits;
+  return rectIntersection(args);
+};
 
 const DEFAULT_METRICS: CellMetrics = { cellSizePx: 28, gapPx: 5.6 };
 
@@ -66,9 +78,10 @@ export default function App() {
   const previewTint = useMemo(() => {
     if (!placementPreview) return null;
     const m = new Map<string, "valid" | "invalid">();
+    const tint = placementPreview.valid ? "valid" : "invalid";
     for (const [r, c] of placementPreview.cells) {
       if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
-        m.set(`${r}-${c}`, placementPreview.valid ? "valid" : "invalid");
+        m.set(`${r}-${c}`, tint);
       }
     }
     return m;
@@ -84,6 +97,7 @@ export default function App() {
   }, []);
 
   const onDragStart = useCallback(() => {
+    resumeAudio();
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
   }, []);
@@ -107,9 +121,16 @@ export default function App() {
 
       if (pos) {
         const valid = canPlacePieceAt(piece, grid, pos.r, pos.c);
-        const cells = piece.cells.map(
-          ([dr, dc]) => [pos.r + dr, pos.c + dc] as [number, number],
-        );
+        const seen = new Set<string>();
+        const cells: [number, number][] = [];
+        for (const [dr, dc] of piece.cells) {
+          const r = pos.r + dr;
+          const c = pos.c + dc;
+          const key = `${r}-${c}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          cells.push([r, c]);
+        }
         setPlacementPreview({ cells, valid });
         lastBoardAnchorRef.current = pos;
         return;
@@ -153,6 +174,7 @@ export default function App() {
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={cellCollision}
       onDragStart={onDragStart}
       onDragMove={onDragMove}
       onDragEnd={onDragEnd}
@@ -201,6 +223,7 @@ export default function App() {
             grid={grid}
             clearingKeys={clearingKeys}
             previewTint={previewTint}
+            dragPreviewActive={placementPreview != null}
             onCellMetrics={handleCellMetrics}
           />
 

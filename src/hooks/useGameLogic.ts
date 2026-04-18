@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { playClearSound, playPlaceSound } from "../audio/gameSounds";
 
 export type ShapeKind =
   | "dot"
@@ -209,6 +210,8 @@ export function useGameLogic() {
       if (!piece) return false;
       if (!canPlacePieceAt(piece, grid, anchorR, anchorC)) return false;
 
+      playPlaceSound();
+
       const placed = cloneGrid(grid);
       for (const [dr, dc] of piece.cells) {
         const r = anchorR + dr;
@@ -233,6 +236,7 @@ export function useGameLogic() {
         if (typeof navigator !== "undefined" && navigator.vibrate) {
           navigator.vibrate(50);
         }
+        playClearSound(rows.length + cols.length);
         setGrid(placed);
         setHand(handAfter);
         setClearingKeys(keys);

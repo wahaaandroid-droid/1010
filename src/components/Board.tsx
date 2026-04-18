@@ -17,12 +17,15 @@ function BoardCell({
   cell,
   clearingKeys,
   previewTint,
+  dragPreviewActive,
 }: {
   r: number;
   c: number;
   cell: GridCell;
   clearingKeys: Set<string> | null;
   previewTint: "valid" | "invalid" | null;
+  /** When true, only cells that are part of the piece preview get pointer hover (avoids cyan frame on T “hole” / anchor gap) */
+  dragPreviewActive: boolean;
 }) {
   const id = `cell-${r}-${c}`;
   const { isOver, setNodeRef } = useDroppable({ id });
@@ -31,12 +34,15 @@ function BoardCell({
   const filled = cell !== 0;
   const color = filled ? KIND_TO_COLOR[cell as ShapeKind] : "";
 
+  const showPointerHover =
+    isOver && (!dragPreviewActive || previewTint != null);
+
   const borderClass =
     previewTint === "valid"
       ? "border-emerald-400 ring-2 ring-emerald-400/50 bg-emerald-500/20"
       : previewTint === "invalid"
         ? "border-red-400 ring-2 ring-red-400/50 bg-red-500/20"
-        : isOver
+        : showPointerHover
           ? "border-cyan-400/80 bg-slate-700/50"
           : "border-slate-800 bg-slate-900/60";
 
@@ -78,6 +84,8 @@ export interface BoardProps {
   grid: GridCell[][];
   clearingKeys: Set<string> | null;
   previewTint: Map<string, "valid" | "invalid"> | null;
+  /** True while a piece placement preview is shown (including stale anchor between cells) */
+  dragPreviewActive?: boolean;
   onCellMetrics?: (m: CellMetrics) => void;
 }
 
@@ -85,6 +93,7 @@ export function Board({
   grid,
   clearingKeys,
   previewTint,
+  dragPreviewActive = false,
   onCellMetrics,
 }: BoardProps) {
   const gridRef = useRef<HTMLDivElement>(null);
@@ -136,6 +145,7 @@ export function Board({
                 cell={cell}
                 clearingKeys={clearingKeys}
                 previewTint={tint}
+                dragPreviewActive={dragPreviewActive}
               />
             );
           }),
