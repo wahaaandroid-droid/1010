@@ -1,7 +1,7 @@
+import type { CSSProperties } from "react";
 import type { PieceDef, ShapeKind } from "../hooks/useGameLogic";
 import { KIND_TO_COLOR } from "../hooks/useGameLogic";
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 
 function bounds(cells: [number, number][]) {
   let maxR = 0;
@@ -96,17 +96,17 @@ export function HandPiece({
   cellSizePx = 28,
   gapPx = 5,
 }: HandPieceProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({
-      id: `hand-${handIndex}`,
-      disabled: disabled || piece == null,
-      data: { handIndex, piece },
-    });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `hand-${handIndex}`,
+    disabled: disabled || piece == null,
+    data: { handIndex, piece },
+  });
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.35 : 1,
-    touchAction: "none" as const,
+  /* Do not translate the hand slot — DragOverlay follows the pointer so the grid preview stays aligned */
+  const style: CSSProperties = {
+    opacity: isDragging ? 0.42 : 1,
+    touchAction: "none",
+    cursor: disabled || piece == null ? "default" : isDragging ? "grabbing" : "grab",
   };
 
   return (
@@ -115,7 +115,7 @@ export function HandPiece({
       style={style}
       {...listeners}
       {...attributes}
-      className="flex items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-900/80 p-3 shadow-lg"
+      className="flex touch-none items-center justify-center rounded-2xl border border-slate-700/80 bg-slate-900/80 p-3 shadow-lg"
     >
       {piece ? (
         <PiecePreview piece={piece} cellSizePx={cellSizePx} gapPx={gapPx} />

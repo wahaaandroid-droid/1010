@@ -1,5 +1,6 @@
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   TouchSensor,
   pointerWithin,
@@ -9,10 +10,11 @@ import {
   type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Board, type CellMetrics } from "./components/Board";
-import { HandPiece } from "./components/Piece";
+import { HandPiece, PiecePreview } from "./components/Piece";
 import { resumeAudio } from "./audio/gameSounds";
 import type { PieceDef } from "./hooks/useGameLogic";
 import {
@@ -56,6 +58,7 @@ export default function App() {
   } = useGameLogic();
 
   const [cellMetrics, setCellMetrics] = useState<CellMetrics>(DEFAULT_METRICS);
+  const [dragPiece, setDragPiece] = useState<PieceDef | null>(null);
   const [placementPreview, setPlacementPreview] = useState<{
     cells: [number, number][];
     valid: boolean;
@@ -69,7 +72,7 @@ export default function App() {
       activationConstraint: { distance: 6 },
     }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 120, tolerance: 8 },
+      activationConstraint: { delay: 0, tolerance: 12 },
     }),
   );
 
@@ -96,8 +99,10 @@ export default function App() {
     );
   }, []);
 
-  const onDragStart = useCallback(() => {
+  const onDragStart = useCallback((event: DragStartEvent) => {
     resumeAudio();
+    const p = event.active.data.current?.piece as PieceDef | undefined;
+    setDragPiece(p ?? null);
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
   }, []);
@@ -158,6 +163,7 @@ export default function App() {
 
       setPlacementPreview(null);
       lastBoardAnchorRef.current = null;
+      setDragPiece(null);
 
       if (interactionLocked) return;
       if (handIndex == null || pos == null) return;
@@ -169,6 +175,7 @@ export default function App() {
   const onDragCancel = useCallback(() => {
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
+    setDragPiece(null);
   }, []);
 
   return (
@@ -265,6 +272,17 @@ export default function App() {
           </div>
         ) : null}
       </div>
+
+      <DragOverlay dropAnimation={null} zIndex={500}>
+        {dragPiece ? (
+          <PiecePreview
+            piece={dragPiece}
+            cellSizePx={cellMetrics.cellSizePx}
+            gapPx={cellMetrics.gapPx}
+            className="drop-shadow-2xl"
+          />
+        ) : null}
+      </DragOverlay>
     </DndContext>
   );
 }
