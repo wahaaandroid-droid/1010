@@ -75,6 +75,20 @@ function readAnchorScreenTL(
   return { left: br.left, top: br.top };
 }
 
+/** Keep virtual hit-test inside the board rect so `closestCenter` does not latch to bottom rows. */
+function clampPointToGridRect(
+  gridEl: HTMLElement | null,
+  pt: { x: number; y: number },
+  pad: number,
+): { x: number; y: number } {
+  if (!gridEl) return pt;
+  const r = gridEl.getBoundingClientRect();
+  return {
+    x: Math.min(Math.max(pt.x, r.left + pad), r.right - pad),
+    y: Math.min(Math.max(pt.y, r.top + pad), r.bottom - pad),
+  };
+}
+
 function isTouchLikeActivator(event: Event | null): boolean {
   if (!event) return false;
   if ("pointerType" in event && (event as PointerEvent).pointerType === "touch") {
@@ -170,10 +184,10 @@ export default function App() {
       const pt =
         raw != null
           ? touch
-            ? {
+            ? clampPointToGridRect(boardGridRef.current, {
                 x: raw.x,
                 y: raw.y - DRAG_TOUCH_PREVIEW_HIT_OFFSET_Y_PX,
-              }
+              }, 10)
             : raw
           : null;
 
