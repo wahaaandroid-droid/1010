@@ -16,7 +16,14 @@ import {
   type Modifier,
 } from "@dnd-kit/core";
 import { snapCenterToCursor } from "@dnd-kit/modifiers";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Board, type CellMetrics } from "./components/Board";
 import { HandPiece, PiecePreview } from "./components/Piece";
 import { attachAudioUserGestureUnlock, resumeAudio } from "./audio/gameSounds";
@@ -56,7 +63,17 @@ const DRAG_TOUCH_SIDE_NUDGE_OVER_BOARD_PX = 48;
  * On touch, collision uses a point this many pixels **above** the raw finger position so the
  * green placement preview lands on grid cells north of the thumb (same anchor as drop).
  */
-const DRAG_TOUCH_PREVIEW_HIT_OFFSET_Y_PX = 92;
+const DRAG_TOUCH_PREVIEW_HIT_OFFSET_Y_PX = 120;
+
+function readAnchorScreenTL(
+  gridEl: HTMLElement,
+  anchor: { r: number; c: number },
+): { left: number; top: number } | null {
+  const cell = gridEl.querySelector(`[data-board-cell="${anchor.r}-${anchor.c}"]`);
+  if (!cell) return null;
+  const br = cell.getBoundingClientRect();
+  return { left: br.left, top: br.top };
+}
 
 function isTouchLikeActivator(event: Event | null): boolean {
   if (!event) return false;
@@ -93,6 +110,10 @@ export default function App() {
   /** Last board anchor while dragging — touch often clears `over` on release before `onDragEnd` */
   const lastBoardAnchorRef = useRef<{ r: number; c: number } | null>(null);
 
+  /** Viewport top-left of anchor cell — pins DragOverlay to the same cells as the green/red preview */
+  const anchorScreenTLRef = useRef<{ left: number; top: number } | null>(null);
+  const boardGridRef = useRef<HTMLDivElement | null>(null);
+
   /** Touch-only lift applied to drag transform (visual only — not used for hit-testing). */
   const dragTouchLiftPxRef = useRef(0);
   /** True while `over` is a grid cell — adds extra vertical lift so the overlay clears the finger on the board. */
@@ -115,6 +136,20 @@ export default function App() {
         ...args.transform,
         x: args.transform.x + dx,
         y: args.transform.y - lift,
+      };
+    },
+    [],
+  );
+
+  /** After lift, snap overlay top-left to the preview anchor cell (same footprint as placement tint). */
+  const snapDragOverlayToPlacementAnchor: Modifier = useMemo(
+    () => ({ transform, draggingNodeRect }) => {
+      const tl = anchorScreenTLRef.current;
+      if (tl == null || draggingNodeRect == null) return transform;
+      return {
+        ...transform,
+        x: tl.left - draggingNodeRect.left,
+        y: tl.top - draggingNodeRect.top,
       };
     },
     [],
@@ -181,6 +216,16 @@ export default function App() {
 
   useEffect(() => attachAudioUserGestureUnlock(document), []);
 
+  useLayoutEffect(() => {
+    if (!placementPreview || !boardGridRef.current) {
+      if (!placementPreview) anchorScreenTLRef.current = null;
+      return;
+    }
+    const anchor = lastBoardAnchorRef.current;
+    if (!anchor) return;
+    anchorScreenTLRef.current = readAnchorScreenTL(boardGridRef.current, anchor);
+  }, [placementPreview, cellMetrics]);
+
   const interactionLocked = gameOver || clearingKeys != null;
 
   const previewTint = useMemo(() => {
@@ -214,6 +259,7 @@ export default function App() {
     setDragPiece(p ?? null);
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
+    anchorScreenTLRef.current = null;
     lastPointerScreenRef.current = null;
   }, []);
 
@@ -223,6 +269,7 @@ export default function App() {
         setPlacementPreview(null);
         dragTouchOverBoardRef.current = false;
         lastBoardAnchorRef.current = null;
+        anchorScreenTLRef.current = null;
         lastPointerScreenRef.current = null;
         return;
       }
@@ -231,6 +278,7 @@ export default function App() {
         setPlacementPreview(null);
         dragTouchOverBoardRef.current = false;
         lastBoardAnchorRef.current = null;
+        anchorScreenTLRef.current = null;
         lastPointerScreenRef.current = null;
         return;
       }
@@ -251,6 +299,9 @@ export default function App() {
           seen.add(key);
           cells.push([r, c]);
         }
+        if (boardGridRef.current) {
+          anchorScreenTLRef.current = readAnchorScreenTL(boardGridRef.current, pos);
+        }
         setPlacementPreview({ cells, valid });
         lastBoardAnchorRef.current = pos;
         return;
@@ -260,6 +311,7 @@ export default function App() {
         setPlacementPreview(null);
         dragTouchOverBoardRef.current = false;
         lastBoardAnchorRef.current = null;
+        anchorScreenTLRef.current = null;
         return;
       }
 
@@ -273,6 +325,7 @@ export default function App() {
       dragTouchLiftPxRef.current = 0;
       dragTouchOverBoardRef.current = false;
       lastPointerScreenRef.current = null;
+      anchorScreenTLRef.current = null;
       const handIndex = event.active.data.current?.handIndex as number | undefined;
       const overId = event.over?.id?.toString();
       let pos = parseCellId(overId);
@@ -295,6 +348,7 @@ export default function App() {
     dragTouchLiftPxRef.current = 0;
     dragTouchOverBoardRef.current = false;
     lastPointerScreenRef.current = null;
+    anchorScreenTLRef.current = null;
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
     setDragPiece(null);
@@ -303,7 +357,7 @@ export default function App() {
   return (
     <DndContext
       sensors={sensors}
-      modifiers={[snapCenterToCursor, liftTouchPieces]}
+      modifiers={[snapCenterToCursor, liftTouchPieces, snapDragOverlayToPlacementAnchor]}
       collisionDetection={cellCollisionPointerFirst}
       onDragStart={onDragStart}
       onDragMove={onDragMove}
@@ -355,6 +409,7 @@ export default function App() {
             previewTint={previewTint}
             dragPreviewActive={placementPreview != null}
             onCellMetrics={handleCellMetrics}
+            boardGridRef={boardGridRef}
           />
 
           <section
@@ -402,9 +457,7 @@ export default function App() {
             piece={dragPiece}
             cellSizePx={cellMetrics.cellSizePx}
             gapPx={cellMetrics.gapPx}
-            className={`pointer-events-none drop-shadow-2xl ${
-              placementPreview != null ? "opacity-0" : "opacity-95"
-            }`}
+            className="pointer-events-none drop-shadow-2xl"
           />
         ) : null}
       </DragOverlay>
