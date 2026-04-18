@@ -1,6 +1,12 @@
 import { useDroppable } from "@dnd-kit/core";
 import { motion } from "framer-motion";
-import { useLayoutEffect, useRef } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  type MutableRefObject,
+  type Ref,
+} from "react";
 import type { GridCell, ShapeKind } from "../hooks/useGameLogic";
 import { KIND_TO_COLOR } from "../hooks/useGameLogic";
 
@@ -56,6 +62,7 @@ function BoardCell({
   return (
     <div
       ref={setNodeRef}
+      data-board-cell={`${r}-${c}`}
       className={`relative aspect-square rounded-lg border-2 transition-colors ${borderClass}`}
     >
       {filled ? (
@@ -94,6 +101,8 @@ export interface BoardProps {
   /** True while a piece placement preview is shown (including stale anchor between cells) */
   dragPreviewActive?: boolean;
   onCellMetrics?: (m: CellMetrics) => void;
+  /** The 10×10 grid container (padding + CSS grid) — for snapping drag preview to cells */
+  boardGridRef?: Ref<HTMLDivElement> | MutableRefObject<HTMLDivElement | null>;
 }
 
 export function Board({
@@ -102,8 +111,22 @@ export function Board({
   previewTint,
   dragPreviewActive = false,
   onCellMetrics,
+  boardGridRef,
 }: BoardProps) {
-  const gridRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+
+  const setGridEl = useCallback(
+    (node: HTMLDivElement | null) => {
+      gridRef.current = node;
+      if (!boardGridRef) return;
+      if (typeof boardGridRef === "function") {
+        boardGridRef(node);
+      } else if ("current" in boardGridRef) {
+        (boardGridRef as MutableRefObject<HTMLDivElement | null>).current = node;
+      }
+    },
+    [boardGridRef],
+  );
 
   useLayoutEffect(() => {
     const el = gridRef.current;
@@ -131,7 +154,7 @@ export function Board({
       style={{ touchAction: "none" }}
     >
       <div
-        ref={gridRef}
+        ref={setGridEl}
         className="aspect-square w-full rounded-3xl border-2 border-slate-600 bg-slate-900 p-3 shadow-2xl shadow-black/50 ring-1 ring-white/10"
         style={{
           display: "grid",

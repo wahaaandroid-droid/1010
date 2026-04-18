@@ -1,4 +1,5 @@
 import {
+  closestCenter,
   DndContext,
   DragOverlay,
   PointerSensor,
@@ -7,6 +8,7 @@ import {
   rectIntersection,
   useSensor,
   useSensors,
+  type ClientRect,
   type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
@@ -14,7 +16,14 @@ import {
   type Modifier,
 } from "@dnd-kit/core";
 import { snapCenterToCursor } from "@dnd-kit/modifiers";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Board, type CellMetrics } from "./components/Board";
 import { HandPiece, PiecePreview } from "./components/Piece";
 import { attachAudioUserGestureUnlock, resumeAudio } from "./audio/gameSounds";
@@ -54,6 +63,29 @@ function isTouchLikeActivator(event: Event | null): boolean {
 
 const DEFAULT_METRICS: CellMetrics = { cellSizePx: 28, gapPx: 5.6 };
 
+function readAnchorScreenTL(
+  gridEl: HTMLElement,
+  anchor: { r: number; c: number },
+): { left: number; top: number } | null {
+  const cell = gridEl.querySelector(`[data-board-cell="${anchor.r}-${anchor.c}"]`);
+  if (!cell) return null;
+  const br = cell.getBoundingClientRect();
+  return { left: br.left, top: br.top };
+}
+
+/** Top-left grid cell of the placement footprint (same as droppable anchor for normalized pieces). */
+function anchorFromPlacementCells(cells: [number, number][]): { r: number; c: number } | null {
+  if (cells.length === 0) return null;
+  let r = Infinity;
+  let c = Infinity;
+  for (const [br, bc] of cells) {
+    r = Math.min(r, br);
+    c = Math.min(c, bc);
+  }
+  if (!Number.isFinite(r) || !Number.isFinite(c)) return null;
+  return { r, c };
+}
+
 export default function App() {
   const {
     grid,
@@ -77,6 +109,10 @@ export default function App() {
   /** Last board anchor while dragging — touch often clears `over` on release before `onDragEnd` */
   const lastBoardAnchorRef = useRef<{ r: number; c: number } | null>(null);
 
+  /** Viewport top-left of the anchor cell — snap DragOverlay to match green preview cells */
+  const anchorScreenTLRef = useRef<{ left: number; top: number } | null>(null);
+  const boardGridRef = useRef<HTMLDivElement | null>(null);
+
   /** Touch-only lift applied to drag transform + collision (see `liftTouchPieces` / `cellCollisionWithTouchLift`). */
   const dragTouchLiftPxRef = useRef(0);
 
@@ -89,29 +125,56 @@ export default function App() {
     [],
   );
 
+  /** While a board placement preview is active, pin the drag overlay to that cell (same place as the green frame). */
+  const snapDragOverlayToPlacementAnchor: Modifier = useMemo(
+    () => ({ transform, draggingNodeRect }) => {
+      const tl = anchorScreenTLRef.current;
+      if (tl == null || draggingNodeRect == null) return transform;
+      return {
+        ...transform,
+        x: tl.left - draggingNodeRect.left,
+        y: tl.top - draggingNodeRect.top,
+      };
+    },
+    [],
+  );
+
+  /**
+   * Always prefer the pointer (with touch vertical lift) so the active cell tracks the finger
+   * smoothly. Using `rectIntersection` first against the snapped drag overlay caused skips.
+   * Gaps between cells: nearest cell center to the pointer, then piece–rect fallback.
+   */
   const cellCollisionWithTouchLift = useMemo<CollisionDetection>(
     () => (args) => {
       const lift = dragTouchLiftPxRef.current;
       const pc = args.pointerCoordinates;
+      const adjusted =
+        pc != null ? { x: pc.x, y: pc.y - lift } : null;
 
-      if (lift === 0) {
-        const hits = pointerWithin(args);
-        if (hits.length > 0) return hits;
-        return rectIntersection(args);
-      }
-
-      const rectHits = rectIntersection(args);
-      if (rectHits.length > 0) return rectHits;
-
-      if (pc) {
-        const liftedHits = pointerWithin({
+      if (adjusted) {
+        const fromPointer = pointerWithin({
           ...args,
-          pointerCoordinates: { x: pc.x, y: pc.y - lift },
+          pointerCoordinates: adjusted,
         });
-        if (liftedHits.length > 0) return liftedHits;
+        if (fromPointer.length > 0) return fromPointer;
+
+        const pointRect: ClientRect = {
+          width: 1,
+          height: 1,
+          top: adjusted.y,
+          left: adjusted.x,
+          bottom: adjusted.y + 1,
+          right: adjusted.x + 1,
+        };
+        const fromClosest = closestCenter({
+          ...args,
+          collisionRect: pointRect,
+          pointerCoordinates: adjusted,
+        });
+        if (fromClosest.length > 0) return fromClosest;
       }
 
-      return pointerWithin(args);
+      return rectIntersection(args);
     },
     [],
   );
@@ -126,6 +189,20 @@ export default function App() {
   );
 
   useEffect(() => attachAudioUserGestureUnlock(document), []);
+
+  useLayoutEffect(() => {
+    if (!placementPreview || !boardGridRef.current) {
+      if (!placementPreview) anchorScreenTLRef.current = null;
+      return;
+    }
+    const anchor = anchorFromPlacementCells(placementPreview.cells);
+    if (!anchor) {
+      anchorScreenTLRef.current = null;
+      return;
+    }
+    const next = readAnchorScreenTL(boardGridRef.current, anchor);
+    anchorScreenTLRef.current = next;
+  }, [placementPreview, cellMetrics]);
 
   const interactionLocked = gameOver || clearingKeys != null;
 
@@ -159,6 +236,7 @@ export default function App() {
     setDragPiece(p ?? null);
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
+    anchorScreenTLRef.current = null;
   }, []);
 
   const onDragMove = useCallback(
@@ -166,12 +244,14 @@ export default function App() {
       if (interactionLocked) {
         setPlacementPreview(null);
         lastBoardAnchorRef.current = null;
+        anchorScreenTLRef.current = null;
         return;
       }
       const piece = event.active.data.current?.piece as PieceDef | undefined;
       if (!piece) {
         setPlacementPreview(null);
         lastBoardAnchorRef.current = null;
+        anchorScreenTLRef.current = null;
         return;
       }
 
@@ -190,6 +270,9 @@ export default function App() {
           seen.add(key);
           cells.push([r, c]);
         }
+        if (boardGridRef.current) {
+          anchorScreenTLRef.current = readAnchorScreenTL(boardGridRef.current, pos);
+        }
         setPlacementPreview({ cells, valid });
         lastBoardAnchorRef.current = pos;
         return;
@@ -198,6 +281,7 @@ export default function App() {
       if (overId?.startsWith("hand-")) {
         setPlacementPreview(null);
         lastBoardAnchorRef.current = null;
+        anchorScreenTLRef.current = null;
         return;
       }
 
@@ -209,6 +293,7 @@ export default function App() {
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
       dragTouchLiftPxRef.current = 0;
+      anchorScreenTLRef.current = null;
       const handIndex = event.active.data.current?.handIndex as number | undefined;
       const overId = event.over?.id?.toString();
       let pos = parseCellId(overId);
@@ -229,6 +314,7 @@ export default function App() {
 
   const onDragCancel = useCallback(() => {
     dragTouchLiftPxRef.current = 0;
+    anchorScreenTLRef.current = null;
     setPlacementPreview(null);
     lastBoardAnchorRef.current = null;
     setDragPiece(null);
@@ -237,7 +323,11 @@ export default function App() {
   return (
     <DndContext
       sensors={sensors}
-      modifiers={[snapCenterToCursor, liftTouchPieces]}
+      modifiers={[
+        snapCenterToCursor,
+        liftTouchPieces,
+        snapDragOverlayToPlacementAnchor,
+      ]}
       collisionDetection={cellCollisionWithTouchLift}
       onDragStart={onDragStart}
       onDragMove={onDragMove}
@@ -289,6 +379,7 @@ export default function App() {
             previewTint={previewTint}
             dragPreviewActive={placementPreview != null}
             onCellMetrics={handleCellMetrics}
+            boardGridRef={boardGridRef}
           />
 
           <section
@@ -332,8 +423,8 @@ export default function App() {
 
       <DragOverlay dropAnimation={null} zIndex={500}>
         {/*
-          Keep the floating piece visible over the board too (touch lift keeps it clear of the finger).
-          Cell tint (placementPreview) still shows valid/invalid placement.
+          On the board, modifiers snap this preview to the anchor cell so it sits on the green frame.
+          Off the board, it follows the pointer (with touch lift).
         */}
         {dragPiece ? (
           <PiecePreview
