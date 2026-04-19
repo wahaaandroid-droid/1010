@@ -420,16 +420,16 @@ export default function App() {
           </h1>
           <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
             <div className="shrink-0 rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-right shadow-inner">
-              <div className="text-[10px] tracking-wider text-slate-500">
-                スコア
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                Score
               </div>
               <div className="text-lg font-semibold tabular-nums text-cyan-300">
                 {score}
               </div>
             </div>
             <div className="shrink-0 rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-right shadow-inner">
-              <div className="text-[10px] tracking-wider text-slate-500">
-                ベスト
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                Best
               </div>
               <div className="text-lg font-semibold tabular-nums text-amber-200">
                 {bestScore}
@@ -439,20 +439,20 @@ export default function App() {
               type="button"
               onClick={onToggleSound}
               aria-pressed={soundOn}
-              aria-label={soundOn ? "音をオフにする" : "音をオンにする"}
+              aria-label={soundOn ? "Turn sound off" : "Turn sound on"}
               className="shrink-0 rounded-2xl border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-medium leading-tight text-slate-100 shadow active:scale-[0.98] sm:text-sm"
             >
-              <span className="block text-[10px] tracking-wider text-slate-500">
-                音
+              <span className="block text-[10px] uppercase tracking-wider text-slate-500">
+                Sound
               </span>
-              {soundOn ? "オン" : "オフ"}
+              {soundOn ? "On" : "Off"}
             </button>
             <button
               type="button"
               onClick={onResetFromUser}
               className="shrink-0 rounded-2xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 shadow active:scale-[0.98]"
             >
-              リセット
+              Reset
             </button>
           </div>
         </header>
