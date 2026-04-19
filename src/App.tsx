@@ -419,20 +419,22 @@ export default function App() {
             <h1 className="text-lg font-semibold tracking-tight text-white">
               1010!
             </h1>
-            <p className="text-xs text-slate-400">Drag pieces onto the grid</p>
+            <p className="text-xs text-slate-400">
+              ピースを盤面にドラッグして置きます
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-right shadow-inner">
-              <div className="text-[10px] uppercase tracking-wider text-slate-500">
-                Score
+              <div className="text-[10px] tracking-wider text-slate-500">
+                スコア
               </div>
               <div className="text-lg font-semibold tabular-nums text-cyan-300">
                 {score}
               </div>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-right shadow-inner">
-              <div className="text-[10px] uppercase tracking-wider text-slate-500">
-                Best
+              <div className="text-[10px] tracking-wider text-slate-500">
+                ベスト
               </div>
               <div className="text-lg font-semibold tabular-nums text-amber-200">
                 {bestScore}
@@ -442,20 +444,20 @@ export default function App() {
               type="button"
               onClick={onToggleSound}
               aria-pressed={soundOn}
-              aria-label={soundOn ? "Turn sound off" : "Turn sound on"}
+              aria-label={soundOn ? "音をオフにする" : "音をオンにする"}
               className="rounded-2xl border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-medium leading-tight text-slate-100 shadow active:scale-[0.98] sm:text-sm"
             >
-              <span className="block text-[10px] uppercase tracking-wider text-slate-500">
-                Sound
+              <span className="block text-[10px] tracking-wider text-slate-500">
+                音
               </span>
-              {soundOn ? "On" : "Off"}
+              {soundOn ? "オン" : "オフ"}
             </button>
             <button
               type="button"
               onClick={onResetFromUser}
               className="rounded-2xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 shadow active:scale-[0.98]"
             >
-              Reset
+              リセット
             </button>
           </div>
         </header>
@@ -476,7 +478,7 @@ export default function App() {
             style={{
               gridTemplateColumns: `repeat(${handSize}, minmax(0, 1fr))`,
             }}
-            aria-label="Hand"
+            aria-label="手持ちのピース"
           >
             {Array.from({ length: handSize }, (_, i) => (
               <HandPiece
@@ -494,36 +496,37 @@ export default function App() {
         {!tapSessionReady ? (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-6 backdrop-blur-sm">
             <div className="w-full max-w-sm rounded-3xl border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl">
-              <h2 className="text-2xl font-bold text-white">Welcome</h2>
+              <h2 className="text-2xl font-bold text-white">はじめに</h2>
               <p className="mt-2 text-sm text-slate-400">
-                On iPhone and iPad, Safari only unlocks game audio after a real button tap (same as
-                tapping Reset). Tap below once to start — sound will work on your first move.
+                iPhone や iPad の Safari では、ゲームの音を鳴らすために「本物のボタンのタップ」が
+                必要です（「リセット」を押したときと同じです）。下のボタンを一度タップしてから
+                遊び始めてください。最初の一手から音が出ます。
               </p>
               <button
                 type="button"
                 onClick={onStartSession}
                 className="mt-6 w-full rounded-2xl bg-cyan-500 py-3 text-base font-semibold text-slate-950 shadow-lg active:scale-[0.99]"
               >
-                Start game
+                ゲームを始める
               </button>
             </div>
           </div>
         ) : gameOver ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6 backdrop-blur-sm">
             <div className="w-full max-w-sm rounded-3xl border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl">
-              <h2 className="text-2xl font-bold text-white">Game Over</h2>
+              <h2 className="text-2xl font-bold text-white">ゲームオーバー</h2>
               <p className="mt-2 text-sm text-slate-400">
-                No valid moves left for your pieces.
+                どのピースも盤に置けるマスがありません。
               </p>
               <p className="mt-4 text-lg tabular-nums text-cyan-300">
-                Score: {score}
+                スコア：{score}
               </p>
               <button
                 type="button"
                 onClick={onResetFromUser}
                 className="mt-6 w-full rounded-2xl bg-cyan-500 py-3 text-base font-semibold text-slate-950 shadow-lg active:scale-[0.99]"
               >
-                Play again
+                もう一度遊ぶ
               </button>
             </div>
           </div>
