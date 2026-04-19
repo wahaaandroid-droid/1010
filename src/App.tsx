@@ -415,16 +415,11 @@ export default function App() {
         onPointerDownCapture={() => resumeAudio()}
       >
         <header className="flex flex-shrink-0 items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight text-white">
-              1010!
-            </h1>
-            <p className="text-xs text-slate-400">
-              ピースを盤面にドラッグして置きます
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-right shadow-inner">
+          <h1 className="shrink-0 text-lg font-semibold tracking-tight text-white">
+            1010!
+          </h1>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
+            <div className="shrink-0 rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-right shadow-inner">
               <div className="text-[10px] tracking-wider text-slate-500">
                 スコア
               </div>
@@ -432,7 +427,7 @@ export default function App() {
                 {score}
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-right shadow-inner">
+            <div className="shrink-0 rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-right shadow-inner">
               <div className="text-[10px] tracking-wider text-slate-500">
                 ベスト
               </div>
@@ -445,7 +440,7 @@ export default function App() {
               onClick={onToggleSound}
               aria-pressed={soundOn}
               aria-label={soundOn ? "音をオフにする" : "音をオンにする"}
-              className="rounded-2xl border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-medium leading-tight text-slate-100 shadow active:scale-[0.98] sm:text-sm"
+              className="shrink-0 rounded-2xl border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-medium leading-tight text-slate-100 shadow active:scale-[0.98] sm:text-sm"
             >
               <span className="block text-[10px] tracking-wider text-slate-500">
                 音
@@ -455,7 +450,7 @@ export default function App() {
             <button
               type="button"
               onClick={onResetFromUser}
-              className="rounded-2xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 shadow active:scale-[0.98]"
+              className="shrink-0 rounded-2xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 shadow active:scale-[0.98]"
             >
               リセット
             </button>
@@ -497,7 +492,10 @@ export default function App() {
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-6 backdrop-blur-sm">
             <div className="w-full max-w-sm rounded-3xl border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl">
               <h2 className="text-2xl font-bold text-white">はじめに</h2>
-              <p className="mt-2 text-sm text-slate-400">
+              <p className="mt-2 text-left text-sm text-slate-300">
+                下の手持ちのピースを盤面へドラッグして、置きたいマスにのせます。
+              </p>
+              <p className="mt-3 text-left text-sm text-slate-400">
                 iPhone や iPad の Safari では、ゲームの音を鳴らすために「本物のボタンのタップ」が
                 必要です（「リセット」を押したときと同じです）。下のボタンを一度タップしてから
                 遊び始めてください。最初の一手から音が出ます。
